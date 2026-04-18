@@ -1,0 +1,629 @@
+﻿==========================================================================================================================================
+  [XIN2 / TCDF] 工艺专家操作变量解析报告
+==========================================================================================================================================
+  GraphML 来源  : C:\DML_fresh_start\多种方法因果发现\因果发现结果\tcdf_space_time_dag_xin2.graphml
+  图规模        : 367 节点  5104 有向边
+  目标变量 Y    : Y_grade  (有入边=True)
+  专家认定 operable 变量总数 : 48
+  其中在本图中出现           : 37 个
+
+------------------------------------------------------------------------------------------------------------------------------------------
+  【一】专家认定 Operable 操作变量总览（在图中出现情况）
+------------------------------------------------------------------------------------------------------------------------------------------
+  变量名                                       在图中    直接->Y  Stage Group 描述
+  ---------------------------------------- ------ ------- ----- ----- ----------------------------
+  MC2_QC501_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC502_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC503_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC504_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC505_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC506_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC507_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC508_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC510_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC510_LCDY_AI                         Yes     No        2     C 励磁电压值
+  MC2_QC601_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC602_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC603_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC604_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC607_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC608_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC609_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC2_QC610_LCDL_AO                         Yes     No        2     C 励磁电流设定值
+  MC1_FV101_AO                              Yes     No        3     C 1#三次分级旋流器沉砂加水管道阀位给定
+  MC1_FV201_AO                              Yes     No        3     C 2#三次分级旋流器沉砂加水管道阀位给定
+  MC1_FV301_AO                              Yes     No        3     C 3#三次分级旋流器沉砂加水管道阀位给定
+  MC1_FV501_AO                              Yes     No        3     C 5#三次分级旋流器沉砂加水管道阀位给定
+  MC1_FV601_AO                              Yes     No        3     C 6#三次分级旋流器沉砂加水管道阀位给定
+  MC1_LV101_AO                              Yes     No        3     C 1#三次分级旋流器给矿泵池加水阀位给定
+  MC1_LV301_AO                              Yes     No        3     C 2#三次分级旋流器给矿泵池加水阀位给定
+  FX_X1CX1_AI6                               No     No        6     A Ⅰ系列粗选1作业气量1设定值显示
+  FX_X1CX2_AI6                               No     No        6     A Ⅰ系列粗选2作业气量1设定值显示
+  FX_X1JX_AI15                               No     No        6     A Ⅰ系列精选作业气量3设定值显示
+  FX_X1SX1_AI11                              No     No        6     A Ⅰ系列扫选1作业气量2设定值显示
+  FX_X1SX1_AI38                              No     No        6     A Ⅰ系列扫选1作业电动阀开度
+  FX_X1SX1_AI4                               No     No        6     A Ⅰ系列扫选1作业液位阀1开度设定显示
+  FX_X1SX1_AI6                               No     No        6     A Ⅰ系列扫选1作业气量1设定值显示
+  FX_X1SX2_AI4                               No     No        6     A Ⅰ系列扫选2作业液位阀1开度设定显示
+  FX_X1SX3_AI12                              No     No        6     A Ⅰ系列扫选3作业蝶阀2开度设定值显示
+  FX_X1SX3_AI4                               No     No        6     A Ⅰ系列扫选3作业液位阀1开度设定显示
+  FX_X1SX3_AI6                               No     No        6     A Ⅰ系列扫选3作业气量1设定值显示
+  FX_X2CX1_AI12                             Yes     No        6     B Ⅱ系列粗选1作业蝶阀2开度设定值显示
+  FX_X2CX2_AI12                             Yes     No        6     B Ⅱ系列粗选2作业蝶阀2开度设定值显示
+  FX_X2CX2_AI27                             Yes     No        6     B Ⅱ系列粗选2作业电动阀开度
+  FX_X2JX_AI11                              Yes     No        6     B Ⅱ系列精选作业气量2设定值显示
+  FX_X2JX_AI38                              Yes     No        6     B Ⅱ系列精选作业电动阀开度
+  FX_X2SX1_AI38                             Yes     No        6     B Ⅱ系列扫选1作业电动阀开度
+  FX_X2SX2_AI12                             Yes     No        6     B Ⅱ系列扫选2作业蝶阀2开度设定值显示
+  FX_X2SX2_AI4                              Yes     No        6     B Ⅱ系列扫选2作业液位阀1开度设定显示
+  FX_X2SX2_AI8                              Yes     No        6     B Ⅱ系列扫选2作业蝶阀1开度设定值显示
+  FX_X2SX3_AI12                             Yes     No        6     B Ⅱ系列扫选3作业蝶阀2开度设定值显示
+  FX_X2SX3_AI27                             Yes     No        6     B Ⅱ系列扫选3作业电动阀开度
+  FX_X2SX3_AI8                              Yes     No        6     B Ⅱ系列扫选3作业蝶阀1开度设定值显示
+
+------------------------------------------------------------------------------------------------------------------------------------------
+  【注意】以下 operable 变量未出现在 TCDF xin2 图中（算法未检测到因果关系）：
+------------------------------------------------------------------------------------------------------------------------------------------
+    - FX_X1CX1_AI6                              Ⅰ系列粗选1作业气量1设定值显示
+    - FX_X1CX2_AI6                              Ⅰ系列粗选2作业气量1设定值显示
+    - FX_X1JX_AI15                              Ⅰ系列精选作业气量3设定值显示
+    - FX_X1SX1_AI11                             Ⅰ系列扫选1作业气量2设定值显示
+    - FX_X1SX1_AI38                             Ⅰ系列扫选1作业电动阀开度
+    - FX_X1SX1_AI4                              Ⅰ系列扫选1作业液位阀1开度设定显示
+    - FX_X1SX1_AI6                              Ⅰ系列扫选1作业气量1设定值显示
+    - FX_X1SX2_AI4                              Ⅰ系列扫选2作业液位阀1开度设定显示
+    - FX_X1SX3_AI12                             Ⅰ系列扫选3作业蝶阀2开度设定值显示
+    - FX_X1SX3_AI4                              Ⅰ系列扫选3作业液位阀1开度设定显示
+    - FX_X1SX3_AI6                              Ⅰ系列扫选3作业气量1设定值显示
+
+==========================================================================================================================================
+  【二】Pearl SCM 因果角色分析（仅以 operable 变量为 T）
+==========================================================================================================================================
+  操作变量T                                  | 角色类型           | 关联节点                                   |   Stage | Group | Operability | 描述
+  ----------------------------------------------------------------------------------------------------------------------------------------
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | FX_GFJ906_F                            |       0 |     C | observable | 离心鼓风机906频率反馈              
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC504_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC603_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC607_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC608_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC2_QC501_LCDL_AO                      | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | FX_GFJ903_I                            |       0 |     C | observable | 离心鼓风机903电流反馈              
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | FX_GFJ906_F                            |       0 |     C | observable | 离心鼓风机906频率反馈              
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC1_AH10_AI6                           |       0 |     C | observable | 磨磁1#配电室2#变压器总瞬时有功功率       
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC505_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC505_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC508_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC510_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC607_LCDL_AO                      | 4-Instrument   | MC2_RC111_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | FX_GFJ905_I                            |       0 |     C | observable | 离心鼓风机905电流反馈              
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | FX_PT_905_CK                           |       0 |     C | observable | 离心鼓风机905出口压力              
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC501_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC502_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC504_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC504_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC508_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC508_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC507_LCDL_AO                      | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC502_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC505_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC508_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC610_LCDL_AO                      | 4-Instrument   | MC2_RC112_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | FX_GFJ906_F                            |       0 |     C | observable | 离心鼓风机906频率反馈              
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC501_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC504_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC507_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC601_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC603_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC609_LCDL_AO                      | 4-Instrument   | MC2_QC608_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | FX_PT_905_CK                           |       0 |     C | observable | 离心鼓风机905出口压力              
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI2                            |       0 |     C | observable | 磨磁2#进线柜正向有功总电量            
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI3                            |       0 |     C | observable | 磨磁2#进线柜正向无功总电量            
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC506_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC610_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC505_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | FX_LT_631                              |       1 |     C | observable | 热水桶液位                     
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC1_AH10_AI6                           |       0 |     C | observable | 磨磁1#配电室2#变压器总瞬时有功功率       
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC503_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC508_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC601_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC607_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC502_LCDL_AO                      | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | FX_JBC303_I                            |       1 |     C | observable | 3#高效搅拌槽303电流              
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | FX_JBC304_I                            |       1 |     C | observable | 3#高效搅拌槽304电流              
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI1                            |       0 |     C | observable | 磨磁2#进线柜组合有功总电量            
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC1_KYJ2_ZDJPL                         |       0 |     C | observable | 2号空压机主电机频率                
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC501_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC504_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC505_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC506_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC510_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC608_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC610_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC603_LCDL_AO                      | 4-Instrument   | MC2_RC112_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | FX_GFJ903_I                            |       0 |     C | observable | 离心鼓风机903电流反馈              
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | FX_JBC304_I                            |       1 |     C | observable | 3#高效搅拌槽304电流              
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | FX_PT_905_CK                           |       0 |     C | observable | 离心鼓风机905出口压力              
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC1_AH8_AI5                            |       0 |     C | observable | 磨磁2#配电室2#变压器总功率因素         
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC1_KYJ2_ZDJPL                         |       0 |     C | observable | 2号空压机主电机频率                
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC602_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC603_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC607_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC503_LCDL_AO                      | 4-Instrument   | MC2_RC112_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC1_AH10_AI6                           |       0 |     C | observable | 磨磁1#配电室2#变压器总瞬时有功功率       
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC502_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC504_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC505_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC505_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC603_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC601_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | FX_JBC304_I                            |       1 |     C | observable | 3#高效搅拌槽304电流              
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC507_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC508_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC508_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC602_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC604_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC609_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  MC2_QC510_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC503_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC602_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC608_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC604_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI3                            |       0 |     C | observable | 磨磁2#进线柜正向无功总电量            
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC1_KYJ2_ZDJPL                         |       0 |     C | observable | 2号空压机主电机频率                
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC505_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC507_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC510_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC603_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC604_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC607_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC608_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC602_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC1_AH10_AI6                           |       0 |     C | observable | 磨磁1#配电室2#变压器总瞬时有功功率       
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC507_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC603_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC504_LCDL_AO                      | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI1                            |       0 |     C | observable | 磨磁2#进线柜组合有功总电量            
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC1_KYJ2_ZDJPL                         |       0 |     C | observable | 2号空压机主电机频率                
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC501_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC504_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC505_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC506_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC508_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC508_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC601_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC602_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC607_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC610_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC506_LCDL_AO                      | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | FX_TT_902_JK                           |       0 |     C | observable | 离心鼓风机902进口温度              
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC1_AH6_AI7                            |       0 |     C | observable | 磨磁3#配电室2#变压器总瞬时无功功率       
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC1_AH8_AI6                            |       0 |     C | observable | 磨磁2#配电室2#变压器总瞬时有功功率       
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC505_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC505_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC506_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC507_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC507_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC510_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC510_PWF_AI                       |       2 |     C | observable | 排污阀门开度实际值                 
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC610_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC2_QC510_LCDY_AI                      | 4-Instrument   | MC2_QC610_XQWD_AI                      |       2 |     C | observable | 线圈温度值                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI2                            |       0 |     C | observable | 磨磁2#进线柜正向有功总电量            
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC501_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC507_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC510_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC603_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC604_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC608_LCDL_AO                      | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC508_LCDL_AO                      | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC2_QC508_LCDL_AO                      | 4-Instrument   | MC2_QC602_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC2_QC508_LCDL_AO                      | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC2_QC508_LCDL_AO                      | 4-Instrument   | MC2_QC606_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC1_FV301_AO                           | 4-Instrument   | FX_GFJ904_F                            |       0 |     C | observable | 离心鼓风机904频率反馈              
+  MC1_FV301_AO                           | 4-Instrument   | MC1_FET302_AI                          |       3 |     C | observable | 3#三次分级旋流器给矿管道流量           
+  MC1_FV301_AO                           | 4-Instrument   | MC1_GKB705_DL                          |       3 |     C | observable | 5#三旋给矿泵电流                 
+  MC1_FV301_AO                           | 4-Instrument   | MC1_GKB706_HZ                          |       3 |     C | observable | 6#三旋给矿泵频率反馈               
+  MC1_FV301_AO                           | 4-Instrument   | MC1_GKB710_HZ                          |       3 |     C | observable | 10#三旋给矿泵频率反馈              
+  MC1_FV301_AO                           | 4-Instrument   | MC1_LV101_AO                           |       3 |     C |   operable | 1#三次分级旋流器给矿泵池加水阀位给定       
+  MC1_FV301_AO                           | 4-Instrument   | MC1_TM201_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC501_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC504_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC505_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC508_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC606_ZHPL_AI                      |       2 |     C | observable | 转环电机实际工作频率显示值             
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC609_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV301_AO                           | 4-Instrument   | MC2_QC610_XQWD_AI                      |       2 |     C | observable | 线圈温度值                     
+  MC1_FV301_AO                           | 4-Instrument   | MC2_YLB809_DL                          |       3 |     C | observable | 9#旋流器溢流泵电流                
+  MC1_FV301_AO                           | 4-Instrument   | MC2_YLB811_DL                          |       3 |     C | observable | 11#旋流器溢流泵电流               
+  MC1_FV301_AO                           | 4-Instrument   | MC2_ZJB01_AO                           |       3 |     C | observable | 底流泵站1#渣浆泵频率给定             
+  MC1_FV501_AO                           | 4-Instrument   | FX_GFJ905_I                            |       0 |     C | observable | 离心鼓风机905电流反馈              
+  MC1_FV501_AO                           | 4-Instrument   | FX_HV_631_AI                           |       1 |     C | observable | 热水桶加蒸汽电动调节蝶阀HV-631阀位反馈信号  
+  MC1_FV501_AO                           | 4-Instrument   | FX_TT_901_8                            |       0 |     C | observable | 离心鼓风机901电机U2相绕组温度         
+  MC1_FV501_AO                           | 4-Instrument   | MC1_AH12_AI6                           |       3 |     C | observable | 磨磁6#塔磨机总瞬时有功功率            
+  MC1_FV501_AO                           | 4-Instrument   | MC1_AH6_AI5                            |       0 |     C | observable | 磨磁3#配电室2#变压器总功率因素         
+  MC1_FV501_AO                           | 4-Instrument   | MC1_FET502_AI                          |       3 |     C | observable | 5#三次分级旋流器给矿管道流量           
+  MC1_FV501_AO                           | 4-Instrument   | MC1_FET503_AI                          |       3 |     C | observable | 3#三次分级旋流器给矿泵池加水管道流量       
+  MC1_FV501_AO                           | 4-Instrument   | MC1_FET601_AI                          |       3 |     C | observable | 6#三次分级旋流器沉砂加水管道流量         
+  MC1_FV501_AO                           | 4-Instrument   | MC1_FV501_AI                           |       3 |     C | observable | 5#三次分级旋流器沉砂加水管道阀位反馈       
+  MC1_FV501_AO                           | 4-Instrument   | MC1_GKB706_DL                          |       3 |     C | observable | 6#三旋给矿泵电流                 
+  MC1_FV501_AO                           | 4-Instrument   | MC1_GKB708_DL                          |       3 |     C | observable | 8#三旋给矿泵电流                 
+  MC1_FV501_AO                           | 4-Instrument   | MC1_GKB710_DL                          |       3 |     C | observable | 10#三旋给矿泵电流                
+  MC1_FV501_AO                           | 4-Instrument   | MC1_GKB710_HZ                          |       3 |     C | observable | 10#三旋给矿泵频率反馈              
+  MC1_FV501_AO                           | 4-Instrument   | MC1_GKB712_DL                          |       3 |     C | observable | 12#三旋给矿泵电流                
+  MC1_FV501_AO                           | 4-Instrument   | MC1_LET101_AI                          |       3 |     C | observable | 1#三次分级旋流器给矿泵池液位           
+  MC1_FV501_AO                           | 4-Instrument   | MC1_TM205_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC502_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC502_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC505_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC509_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC509_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC509_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC603_CKSRKYL_AI                   |       2 |     C | observable | 冲矿水入口压力值                  
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC605_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC606_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  MC1_FV501_AO                           | 4-Instrument   | MC2_QC608_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_FV101_AO                           | 1-Confounder   | MC1_TM201_JSJ_YC_WD_AI                 |       3 |     C | observable | 减速机油池温度                   
+  MC1_FV101_AO                           | 4-Instrument   | FX_JBC303_I                            |       1 |     C | observable | 3#高效搅拌槽303电流              
+  MC1_FV101_AO                           | 4-Instrument   | MC1_AH4_AI7                            |       0 |     C | observable | 磨磁2#进线柜总瞬时无功功率            
+  MC1_FV101_AO                           | 4-Instrument   | MC1_FV201_AO                           |       3 |     C |   operable | 2#三次分级旋流器沉砂加水管道阀位给定       
+  MC1_FV101_AO                           | 4-Instrument   | MC1_FV501_AI                           |       3 |     C | observable | 5#三次分级旋流器沉砂加水管道阀位反馈       
+  MC1_FV101_AO                           | 4-Instrument   | MC1_FV501_AO                           |       3 |     C |   operable | 5#三次分级旋流器沉砂加水管道阀位给定       
+  MC1_FV101_AO                           | 4-Instrument   | MC1_GKB706_HZ                          |       3 |     C | observable | 6#三旋给矿泵频率反馈               
+  MC1_FV101_AO                           | 4-Instrument   | MC1_GKB709_HZ                          |       3 |     C | observable | 9#三旋给矿泵频率反馈               
+  MC1_FV101_AO                           | 4-Instrument   | MC1_GKB712_DL                          |       3 |     C | observable | 12#三旋给矿泵电流                
+  MC1_FV101_AO                           | 4-Instrument   | MC1_LV101_AO                           |       3 |     C |   operable | 1#三次分级旋流器给矿泵池加水阀位给定       
+  MC1_FV101_AO                           | 4-Instrument   | MC1_TM205_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_FV101_AO                           | 4-Instrument   | MC2_QC502_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC1_FV101_AO                           | 4-Instrument   | MC2_QC507_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC1_FV101_AO                           | 4-Instrument   | MC2_QC605_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  MC1_FV101_AO                           | 4-Instrument   | MC2_YLB809_DL                          |       3 |     C | observable | 9#旋流器溢流泵电流                
+  MC1_FV101_AO                           | 4-Instrument   | MC2_YLB812_HZ                          |       3 |     C | observable | 12#旋流器溢流泵频率反馈             
+  MC1_FV601_AO                           | 4-Instrument   | FX_AH16_AI6                            |       0 |     C | observable | 浮选6#鼓风机变频总瞬时有功功率          
+  MC1_FV601_AO                           | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  MC1_FV601_AO                           | 4-Instrument   | MC1_AH12_AI5                           |       3 |     C | observable | 磨磁6#塔磨机总功率因素              
+  MC1_FV601_AO                           | 4-Instrument   | MC1_FET601_AI                          |       3 |     C | observable | 6#三次分级旋流器沉砂加水管道流量         
+  MC1_FV601_AO                           | 4-Instrument   | MC1_TM206_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_FV601_AO                           | 4-Instrument   | MC2_QC501_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC1_FV601_AO                           | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  MC1_FV601_AO                           | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC1_FV601_AO                           | 4-Instrument   | MC2_QC504_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC1_FV601_AO                           | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  MC1_LV301_AO                           | 4-Instrument   | FX_TT_902_JK                           |       0 |     C | observable | 离心鼓风机902进口温度              
+  MC1_LV301_AO                           | 4-Instrument   | MC1_FET402_AI                          |       3 |     C | observable | 4#三次分级旋流器给矿管道流量           
+  MC1_LV301_AO                           | 4-Instrument   | MC1_FET503_AI                          |       3 |     C | observable | 3#三次分级旋流器给矿泵池加水管道流量       
+  MC1_LV301_AO                           | 4-Instrument   | MC1_FET601_AI                          |       3 |     C | observable | 6#三次分级旋流器沉砂加水管道流量         
+  MC1_LV301_AO                           | 4-Instrument   | MC1_FV201_AI                           |       3 |     C | observable | 2#三次分级旋流器沉砂加水管道阀位反馈       
+  MC1_LV301_AO                           | 4-Instrument   | MC1_GKB703_DL                          |       3 |     C | observable | 3#三旋给矿泵电流                 
+  MC1_LV301_AO                           | 4-Instrument   | MC1_GKB703_HZ                          |       3 |     C | observable | 3#三旋给矿泵频率反馈               
+  MC1_LV301_AO                           | 4-Instrument   | MC1_GKB706_HZ                          |       3 |     C | observable | 6#三旋给矿泵频率反馈               
+  MC1_LV301_AO                           | 4-Instrument   | MC1_GKB708_DL                          |       3 |     C | observable | 8#三旋给矿泵电流                 
+  MC1_LV301_AO                           | 4-Instrument   | MC1_GKB711_DL                          |       3 |     C | observable | 11#三旋给矿泵电流                
+  MC1_LV301_AO                           | 4-Instrument   | MC1_TM204_JSJ_YC_WD_AI                 |       3 |     C | observable | 减速机油池温度                   
+  MC1_LV301_AO                           | 4-Instrument   | MC1_TM204_ZDJ_QDZC_WD_AI               |       3 |     C | observable | 主电机驱动侧轴承温度                
+  MC1_LV301_AO                           | 4-Instrument   | MC2_QC501_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  MC1_LV301_AO                           | 4-Instrument   | MC2_QC508_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC1_LV301_AO                           | 4-Instrument   | MC2_QC608_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_LV301_AO                           | 4-Instrument   | MC2_RC103_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC1_LV301_AO                           | 4-Instrument   | MC2_RC111_DL_AI                        |       0 |     C | observable | A相电流                      
+  MC1_LV101_AO                           | 2-Mediator     | FX_DT_2602                             |       6 |     B | observable | 粗选给矿泵1104出口管道浓度           
+  MC1_LV101_AO                           | 4-Instrument   | FX_JBC1904_I                           |       1 |     C | observable | 搅拌槽(二次CaO)1904电流          
+  MC1_LV101_AO                           | 4-Instrument   | MC1_FV601_AO                           |       3 |     C |   operable | 6#三次分级旋流器沉砂加水管道阀位给定       
+  MC1_LV101_AO                           | 4-Instrument   | MC1_GKB706_HZ                          |       3 |     C | observable | 6#三旋给矿泵频率反馈               
+  MC1_LV101_AO                           | 4-Instrument   | MC1_LET101_AI                          |       3 |     C | observable | 1#三次分级旋流器给矿泵池液位           
+  MC1_LV101_AO                           | 4-Instrument   | MC1_TM201_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC504_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC505_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC606_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC606_ZHPL_AI                      |       2 |     C | observable | 转环电机实际工作频率显示值             
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC607_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC1_LV101_AO                           | 4-Instrument   | MC2_QC608_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC1_FV201_AO                           | 4-Instrument   | MC1_AH8_AI7                            |       0 |     C | observable | 磨磁2#配电室2#变压器总瞬时无功功率       
+  MC1_FV201_AO                           | 4-Instrument   | MC1_FET202_AI                          |       3 |     C | observable | 2#三次分级旋流器给矿管道流量           
+  MC1_FV201_AO                           | 4-Instrument   | MC1_FV201_AI                           |       3 |     C | observable | 2#三次分级旋流器沉砂加水管道阀位反馈       
+  MC1_FV201_AO                           | 4-Instrument   | MC1_GKB703_DL                          |       3 |     C | observable | 3#三旋给矿泵电流                 
+  MC1_FV201_AO                           | 4-Instrument   | MC1_GKB703_HZ                          |       3 |     C | observable | 3#三旋给矿泵频率反馈               
+  MC1_FV201_AO                           | 4-Instrument   | MC1_GKB708_DL                          |       3 |     C | observable | 8#三旋给矿泵电流                 
+  MC1_FV201_AO                           | 4-Instrument   | MC1_TM204_JSJ_YC_WD_AI                 |       3 |     C | observable | 减速机油池温度                   
+  MC1_FV201_AO                           | 4-Instrument   | MC1_TM204_ZDJ_DL_AI                    |       3 |     C | observable | 主电机电流                     
+  MC1_FV201_AO                           | 4-Instrument   | MC2_QC507_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC1_FV201_AO                           | 4-Instrument   | MC2_QC509_LCDL_AI                      |       2 |     C | observable | 励磁电流值                     
+  MC1_FV201_AO                           | 4-Instrument   | MC2_QC509_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  MC1_FV201_AO                           | 4-Instrument   | MC2_QC509_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  MC1_FV201_AO                           | 4-Instrument   | MC2_YLB806_DL                          |       3 |     C | observable | 6#旋流器溢流泵电流                
+  FX_X2SX2_AI8                           | 1-Confounder   | FX_HGB2203_I                           |       6 |     C | observable | 化工泵(输送一次CaO)2203电流反馈      
+  FX_X2SX2_AI8                           | 2-Mediator     | FX_HGB2203_F                           |       6 |     C | observable | 化工泵(输送一次CaO)2203频率反馈      
+  FX_X2SX2_AI8                           | 4-Instrument   | FX_JBC203_I                            |       5 |     B | observable | 2#高效搅拌槽203电流              
+  FX_X2SX2_AI8                           | 4-Instrument   | FX_X2SX2_AI11                          |       6 |     B | observable | Ⅱ系列扫选2作业蝶阀2开度实际值          
+  FX_X2SX2_AI8                           | 4-Instrument   | FX_X2SX2_AI12                          |       6 |     B |   operable | Ⅱ系列扫选2作业蝶阀2开度设定值显示        
+  FX_X2SX2_AI8                           | 4-Instrument   | FX_X2SX2_AI7                           |       6 |     B | observable | Ⅱ系列扫选2作业蝶阀1开度实际值          
+  FX_X2SX2_AI8                           | 4-Instrument   | FX_ZJB1102_I                           |       6 |     B | observable | 渣浆泵(粗选给矿泵)1102电流反馈        
+  FX_X2SX2_AI8                           | 4-Instrument   | MC1_AH6_AI5                            |       0 |     C | observable | 磨磁3#配电室2#变压器总功率因素         
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC503_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC505_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC505_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC605_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC605_CKSRKYL_AI                   |       2 |     C | observable | 冲矿水入口压力值                  
+  FX_X2SX2_AI8                           | 4-Instrument   | MC2_QC605_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_8F14_ZT                             |       6 |     C | observable | 电动阀(输送二次K6-1粗选)8F14状态     
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_AH16_AI7                            |       6 |     C | observable | 浮选6#鼓风机变频总瞬时无功功率          
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_JBC303_I                            |       1 |     C | observable | 3#高效搅拌槽303电流              
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_P5_PT_202                           |       2 |     C | observable | 2#Φ53m强磁前浓缩池2#底流泵出口压力     
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_TT_2103_BJ                          |       5 |     B | observable | 二系列1#-4高效搅拌槽温度报警          
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_X2CX2_AI27                          |       6 |     B |   operable | Ⅱ系列粗选2作业电动阀开度             
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_X2CX2_AI3                           |       6 |     B | observable | Ⅱ系列粗选2作业液位阀1开度实际值         
+  FX_X2SX3_AI12                          | 4-Instrument   | FX_X2SX3_AI27                          |       6 |     B |   operable | Ⅱ系列扫选3作业电动阀开度             
+  FX_X2SX3_AI12                          | 4-Instrument   | MC1_GKB705_HZ                          |       3 |     C | observable | 5#三旋给矿泵频率反馈               
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC501_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC502_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC601_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC607_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC609_CKSCKYL_AI                   |       2 |     C | observable | 冲矿水出口压力值                  
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC609_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX3_AI12                          | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_AH2_AI6                             |       6 |     B | observable | 浮选2#进线柜总瞬时有功功率            
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_GFJ906_F                            |       0 |     C | observable | 离心鼓风机906频率反馈              
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_PT_905_CK                           |       0 |     C | observable | 离心鼓风机905出口压力              
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_TT_611_SP                           |       1 |     C | observable | 二次K6-1贮药箱(贮罐)温度设定         
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_X2CX2_AI3                           |       6 |     B | observable | Ⅱ系列粗选2作业液位阀1开度实际值         
+  FX_X2SX1_AI38                          | 4-Instrument   | FX_X2SX3_AI11                          |       6 |     B | observable | Ⅱ系列扫选3作业蝶阀2开度实际值          
+  FX_X2SX1_AI38                          | 4-Instrument   | MC1_AH4_AI5                            |       0 |     C | observable | 磨磁2#进线柜总功率因素              
+  FX_X2SX1_AI38                          | 4-Instrument   | MC1_TM202_ZDJ_QDZC_WD_AI               |       3 |     C | observable | 主电机驱动侧轴承温度                
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_NSJ_ZDJPYL_AO                      |       4 |     C | observable | 自动降耙压力设定                  
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC501_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC504_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC510_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2SX1_AI38                          | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2CX2_AI27                          | 4-Instrument   | FX_HGB2902_I                           |       5 |     C | observable | 化工泵(输送热水)2902电流           
+  FX_X2CX2_AI27                          | 4-Instrument   | FX_X2SX3_AI12                          |       6 |     B |   operable | Ⅱ系列扫选3作业蝶阀2开度设定值显示        
+  FX_X2CX2_AI27                          | 4-Instrument   | MC2_QC510_CKSRKYL_AI                   |       2 |     C | observable | 冲矿水入口压力值                  
+  FX_X2SX3_AI27                          | 4-Instrument   | FX_HV_631_AI                           |       1 |     C | observable | 热水桶加蒸汽电动调节蝶阀HV-631阀位反馈信号  
+  FX_X2SX3_AI27                          | 4-Instrument   | FX_TT_901_8                            |       0 |     C | observable | 离心鼓风机901电机U2相绕组温度         
+  FX_X2SX3_AI27                          | 4-Instrument   | FX_TV_2102_AI                          |       5 |     B | observable | 二系列2#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2102
+  FX_X2SX3_AI27                          | 4-Instrument   | FX_X2SX1_AI1                           |       6 |     B | observable | Ⅱ系列扫选1作业泡沫层厚度实际值          
+  FX_X2SX3_AI27                          | 4-Instrument   | FX_X2SX3_AI24                          |       6 |     B | observable | Ⅱ系列扫选3作业2#电机绕组A           
+  FX_X2SX3_AI27                          | 4-Instrument   | MC1_FET602_AI                          |       3 |     C | observable | 6#三次分级旋流器给矿管道流量           
+  FX_X2SX3_AI27                          | 4-Instrument   | MC1_TM202_ZDJ_DZ_A_WD_AI               |       3 |     C | observable | 主电机定子A温度                  
+  FX_X2SX3_AI27                          | 4-Instrument   | MC1_TM202_ZDJ_QDZC_WD_AI               |       3 |     C | observable | 主电机驱动侧轴承温度                
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_NSJ_LPYL_AI                        |       4 |     C | observable | 落耙压力                      
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_NSJ_XZYL_AI                        |       4 |     C | observable | 行走压力                      
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_QC502_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_QC505_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_QC508_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX3_AI27                          | 4-Instrument   | MC2_QC607_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2SX2_AI12                          | 2-Mediator     | FX_HGB2203_F                           |       6 |     C | observable | 化工泵(输送一次CaO)2203频率反馈      
+  FX_X2SX2_AI12                          | 2-Mediator     | FX_HGB2203_I                           |       6 |     C | observable | 化工泵(输送一次CaO)2203电流反馈      
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_FXJ601_I                            |       6 |     C | observable | 浮选机(扫选一)601电流             
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_FXJ603_I                            |       6 |     C | observable | 浮选机(扫选一)603电流             
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_LGB2502_F                           |       6 |     B | observable | 螺杆泵(输送二次K6-1粗选)2502频率反馈   
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_X2JX_AI13                           |       6 |     B | observable | Ⅱ系列精选作业气量3实际值             
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_X2SX1_AI3                           |       6 |     B | observable | Ⅱ系列扫选1作业液位阀1开度实际值         
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_X2SX2_AI11                          |       6 |     B | observable | Ⅱ系列扫选2作业蝶阀2开度实际值          
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_X2SX2_AI7                           |       6 |     B | observable | Ⅱ系列扫选2作业蝶阀1开度实际值          
+  FX_X2SX2_AI12                          | 4-Instrument   | FX_X2SX2_AI8                           |       6 |     B |   operable | Ⅱ系列扫选2作业蝶阀1开度设定值显示        
+  FX_X2SX2_AI12                          | 4-Instrument   | MC2_YLB809_DL                          |       3 |     C | observable | 9#旋流器溢流泵电流                
+  FX_X2CX1_AI12                          | 1-Confounder   | FX_DT_2602                             |       6 |     B | observable | 粗选给矿泵1104出口管道浓度           
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_FXJ604_I                            |       6 |     C | observable | 浮选机(扫选一)604电流             
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_GFJ904_F                            |       0 |     C | observable | 离心鼓风机904频率反馈              
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2CX1_AI7                           |       6 |     B | observable | Ⅱ系列粗选1作业蝶阀1开度实际值          
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2CX1_AI9                           |       6 |     B | observable | Ⅱ系列粗选1作业气量2实际值            
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2CX2_AI9                           |       6 |     B | observable | Ⅱ系列粗选2作业气量2实际值            
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2JX_AI1                            |       6 |     B | observable | Ⅱ系列精选作业泡沫层厚度实际值           
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2JX_AI17                           |       6 |     B | observable | Ⅱ系列精选作业1#减速机低速端上轴温        
+  FX_X2CX1_AI12                          | 4-Instrument   | FX_X2SX3_AI24                          |       6 |     B | observable | Ⅱ系列扫选3作业2#电机绕组A           
+  FX_X2CX1_AI12                          | 4-Instrument   | MC1_FV301_AO                           |       3 |     C |   operable | 3#三次分级旋流器沉砂加水管道阀位给定       
+  FX_X2CX1_AI12                          | 4-Instrument   | MC2_NSJ_XZYL_AI                        |       4 |     C | observable | 行走压力                      
+  FX_X2CX1_AI12                          | 4-Instrument   | MC2_QC510_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2CX1_AI12                          | 4-Instrument   | MC2_QC603_CKSRKYL_AI                   |       2 |     C | observable | 冲矿水入口压力值                  
+  FX_X2CX1_AI12                          | 4-Instrument   | MC2_ZJB01_AO                           |       3 |     C | observable | 底流泵站1#渣浆泵频率给定             
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_FXJ606_I                            |       6 |     C | observable | 浮选机(扫选一)606电流             
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_GFJ904_F                            |       0 |     C | observable | 离心鼓风机904频率反馈              
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_P5_N1_I                             |       4 |     C | observable | 1#Φ53m浮选前浓缩机N1电流          
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2CX1_AI12                          |       6 |     B |   operable | Ⅱ系列粗选1作业蝶阀2开度设定值显示        
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2CX2_AI9                           |       6 |     B | observable | Ⅱ系列粗选2作业气量2实际值            
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2CX3_AI9                           |       6 |     B | observable | Ⅱ系列粗选3作业气量2实际值            
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2JX_AI11                           |       6 |     B |   operable | Ⅱ系列精选作业气量2设定值显示           
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2JX_AI13                           |       6 |     B | observable | Ⅱ系列精选作业气量3实际值             
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2JX_AI3                            |       6 |     B | observable | Ⅱ系列精选作业液位阀1开度实际值          
+  FX_X2CX2_AI12                          | 4-Instrument   | FX_X2SX3_AI24                          |       6 |     B | observable | Ⅱ系列扫选3作业2#电机绕组A           
+  FX_X2CX2_AI12                          | 4-Instrument   | MC2_ZJB01_AO                           |       3 |     C | observable | 底流泵站1#渣浆泵频率给定             
+  FX_X2JX_AI38                           | 4-Instrument   | FX_AH16_AI5                            |       6 |     C | observable | 浮选6#鼓风机变频总功率因素            
+  FX_X2JX_AI38                           | 4-Instrument   | FX_HGB2201_F_W                         |       6 |     C | observable | 化工泵(输送一次CaO)2201频率给定      
+  FX_X2JX_AI38                           | 4-Instrument   | FX_TT_2101_BJ                          |       5 |     B | observable | 二系列1#-3高效搅拌槽温度报警          
+  FX_X2JX_AI38                           | 4-Instrument   | FX_X2JX_AI7                            |       6 |     B | observable | Ⅱ系列精选作业蝶阀1开度实际值           
+  FX_X2JX_AI38                           | 4-Instrument   | FX_X2SX1_AI38                          |       6 |     B |   operable | Ⅱ系列扫选1作业电动阀开度             
+  FX_X2JX_AI38                           | 4-Instrument   | MC1_KYJ2_ZDJPL                         |       0 |     C | observable | 2号空压机主电机频率                
+  FX_X2JX_AI38                           | 4-Instrument   | MC1_LET101_AI                          |       3 |     C | observable | 1#三次分级旋流器给矿泵池液位           
+  FX_X2JX_AI38                           | 4-Instrument   | MC1_TM202_ZDJ_QDZC_WD_AI               |       3 |     C | observable | 主电机驱动侧轴承温度                
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_JYB2_DL_AI                         |       2 |     C | observable | A相电流                      
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC503_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC506_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC506_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC603_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC604_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC606_WKF2_AI                      |       2 |     C | observable | 2#尾矿阀门实际开度反馈值             
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC609_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC610_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2JX_AI38                           | 4-Instrument   | MC2_QC610_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX3_AI8                           | 1-Confounder   | FX_HGB2203_F                           |       6 |     C | observable | 化工泵(输送一次CaO)2203频率反馈      
+  FX_X2SX3_AI8                           | 1-Confounder   | FX_HGB2203_I                           |       6 |     C | observable | 化工泵(输送一次CaO)2203电流反馈      
+  FX_X2SX3_AI8                           | 2-Mediator     | FX_HGB2203_I                           |       6 |     C | observable | 化工泵(输送一次CaO)2203电流反馈      
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_8F14_ZT                             |       6 |     C | observable | 电动阀(输送二次K6-1粗选)8F14状态     
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_AH12_AI6                            |       0 |     C | observable | 浮选4#鼓风机变频总瞬时有功功率          
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_GFJ905_I                            |       0 |     C | observable | 离心鼓风机905电流反馈              
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_LGB2302_I                           |       6 |     B | observable | 螺杆泵(输送二次TD-II粗选)2302电流反馈  
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_LGB2304_I                           |       6 |     B | observable | 螺杆泵(输送二次TD-II粗选)2304电流反馈  
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_LT_2603                             |       6 |     B | observable | 二系列三扫底流泵池(给二扫)液位          
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_TT_902_JK                           |       0 |     C | observable | 离心鼓风机902进口温度              
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_X2SX1_AI1                           |       6 |     B | observable | Ⅱ系列扫选1作业泡沫层厚度实际值          
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_X2SX2_AI11                          |       6 |     B | observable | Ⅱ系列扫选2作业蝶阀2开度实际值          
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_X2SX2_AI12                          |       6 |     B |   operable | Ⅱ系列扫选2作业蝶阀2开度设定值显示        
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_X2SX3_AI17                          |       6 |     B | observable | Ⅱ系列扫选3作业1#电机绕组A           
+  FX_X2SX3_AI8                           | 4-Instrument   | FX_X2SX3_AI7                           |       6 |     B | observable | Ⅱ系列扫选3作业蝶阀1开度实际值          
+  FX_X2SX3_AI8                           | 4-Instrument   | MC1_FV201_AO                           |       3 |     C |   operable | 2#三次分级旋流器沉砂加水管道阀位给定       
+  FX_X2SX3_AI8                           | 4-Instrument   | MC1_GKB703_HZ                          |       3 |     C | observable | 3#三旋给矿泵频率反馈               
+  FX_X2SX3_AI8                           | 4-Instrument   | MC1_GKB704_DL                          |       3 |     C | observable | 4#三旋给矿泵电流                 
+  FX_X2SX3_AI8                           | 4-Instrument   | MC1_GKB707_HZ                          |       3 |     C | observable | 7#三旋给矿泵频率反馈               
+  FX_X2SX3_AI8                           | 4-Instrument   | MC1_TM202_ZDJ_QDZC_WD_AI               |       3 |     C | observable | 主电机驱动侧轴承温度                
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC505_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC508_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC509_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC509_MDPL_AI                      |       2 |     C | observable | 脉动电机实际工作频率显示值             
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC509_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX3_AI8                           | 4-Instrument   | MC2_QC606_WKF1_AI                      |       2 |     C | observable | 1#尾矿阀门实际开度反馈值             
+  FX_X2JX_AI11                           | 4-Instrument   | FX_AH9_AI6                             |       6 |     C | observable | 浮选3#低压室1#变压器总瞬时有功功率       
+  FX_X2JX_AI11                           | 4-Instrument   | FX_X2CX1_AI7                           |       6 |     B | observable | Ⅱ系列粗选1作业蝶阀1开度实际值          
+  FX_X2JX_AI11                           | 4-Instrument   | FX_X2CX2_AI9                           |       6 |     B | observable | Ⅱ系列粗选2作业气量2实际值            
+  FX_X2JX_AI11                           | 4-Instrument   | FX_X2CX3_AI7                           |       6 |     B | observable | Ⅱ系列粗选3作业蝶阀1开度实际值          
+  FX_X2JX_AI11                           | 4-Instrument   | FX_X2CX3_AI9                           |       6 |     B | observable | Ⅱ系列粗选3作业气量2实际值            
+  FX_X2JX_AI11                           | 4-Instrument   | FX_X2SX1_AI38                          |       6 |     B |   operable | Ⅱ系列扫选1作业电动阀开度             
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC503_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC507_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC510_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC601_FCSSJ_AO                     |       2 |     C | observable | 反冲水时间                     
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC601_LCDL_AO                      |       2 |     C |   operable | 励磁电流设定值                   
+  FX_X2JX_AI11                           | 4-Instrument   | MC2_QC606_ZHPL_AI                      |       2 |     C | observable | 转环电机实际工作频率显示值             
+  FX_X2SX2_AI4                           | 4-Instrument   | FX_4F06_ZT                             |       6 |     B | observable | 电动阀(输送二次TD-II粗选)2#4F06状态  
+  FX_X2SX2_AI4                           | 4-Instrument   | FX_TT_902_JK                           |       0 |     C | observable | 离心鼓风机902进口温度              
+  FX_X2SX2_AI4                           | 4-Instrument   | FX_ZJB1102_I                           |       6 |     B | observable | 渣浆泵(粗选给矿泵)1102电流反馈        
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_FET402_AI                          |       3 |     C | observable | 4#三次分级旋流器给矿管道流量           
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_FV301_AO                           |       3 |     C |   operable | 3#三次分级旋流器沉砂加水管道阀位给定       
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_GKB702_HZ                          |       3 |     C | observable | 2#三旋给矿泵频率反馈               
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_GKB704_DL                          |       3 |     C | observable | 4#三旋给矿泵电流                 
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_GKB708_DL                          |       3 |     C | observable | 8#三旋给矿泵电流                 
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_GKB712_DL                          |       3 |     C | observable | 12#三旋给矿泵电流                
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_LV101_AO                           |       3 |     C |   operable | 1#三次分级旋流器给矿泵池加水阀位给定       
+  FX_X2SX2_AI4                           | 4-Instrument   | MC1_TM204_JSJ_YC_WD_AI                 |       3 |     C | observable | 减速机油池温度                   
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_QC508_CKSYL_AI                     |       2 |     C | observable | 冲矿水压力值                    
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_QC508_XKYW_AI                      |       2 |     C | observable | 选矿液位                      
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_QC510_PWF_AI                       |       2 |     C | observable | 排污阀门开度实际值                 
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_QC603_CKSRKYL_AI                   |       2 |     C | observable | 冲矿水入口压力值                  
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_QC606_LCDY_AI                      |       2 |     C | observable | 励磁电压值                     
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_ZJB01_AO                           |       3 |     C | observable | 底流泵站1#渣浆泵频率给定             
+  FX_X2SX2_AI4                           | 4-Instrument   | MC2_ZJB03_DL                           |       3 |     C | observable | 底流泵站3#渣浆泵电流               
+  ----------------------------------------------------------------------------------------------------------------------------------------
+
+==========================================================================================================================================
+  报告结束
+==========================================================================================================================================

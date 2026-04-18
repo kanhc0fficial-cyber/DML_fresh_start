@@ -1,0 +1,27 @@
+# Data files (often too large for GitHub or sensitive)
+数据存储/X_features_new.parquet
+数据存储/y_target_new.csv
+*.parquet
+*.csv
+*.graphml
+
+# Results and Logs
+**/结果/
+**/logs/
+**/output/
+**/results/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
