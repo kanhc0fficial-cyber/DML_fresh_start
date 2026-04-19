@@ -888,8 +888,7 @@ def build_xin2_data(operability_csv: str = DEFAULT_OPERABILITY_CSV):
             left_on="time", right_on="_time_x",
             direction="nearest", tolerance=pd.Timedelta("1min"),
         )
-        if "_time_x" in merged.columns:
-            merged = merged.drop(columns=["_time_x"])
+        merged = merged.drop(columns=["_time_x"])
         merged = merged.set_index("time")
         merged = merged.rename(columns={"y_fx_xin2": "Y_grade"})
         merged = merged.dropna(subset=["Y_grade"])
@@ -904,8 +903,9 @@ def build_xin2_data(operability_csv: str = DEFAULT_OPERABILITY_CSV):
 
     # ── 列过滤 + 低方差剔除 ────────────────────────────────────────
     df = df.loc[:, (df.std() > 1e-4)]
+    all_known_vars = operable_set | observable_set
     valid_cols  = [c for c in df.columns
-                   if c in (operable_set | observable_set) or c == "Y_grade"]
+                   if c in all_known_vars or c == "Y_grade"]
     df_filtered = df[valid_cols]
 
     cols_in_df       = set(df_filtered.columns) - {"Y_grade"}
