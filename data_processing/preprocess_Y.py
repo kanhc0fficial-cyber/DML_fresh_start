@@ -116,7 +116,9 @@ def _extract_ym_from_filename(path: Path) -> Optional[tuple[int, int]]:
     """从文件名中提取 (年, 月)，例如 '2026.01_...' → (2026, 1)。"""
     m = re.search(r"(\d{4})\.(\d{1,2})", path.stem)
     if m:
-        return int(m.group(1)), int(m.group(2))
+        year, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12:
+            return year, month
     return None
 
 
@@ -200,7 +202,7 @@ def _parse_timestamps(
                 try:
                     t = datetime.time(h % 24, m, s)
                     return pd.Timestamp.combine(reference_date, t)
-                except Exception:
+                except (ValueError, TypeError):
                     return pd.NaT
 
             for idx in series[frac_mask].index:
