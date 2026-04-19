@@ -368,6 +368,11 @@ def _compute_mb_mask(X_norm, keep_ratio=0.5):
     corr = np.array(corr_matrix)
     if corr.ndim == 0:
         corr = np.array([[1.0]])
+    if corr.shape != (d, d):
+        raise ValueError(
+            f"spearmanr 返回了意外的相关矩阵形状 {corr.shape}，期望 ({d}, {d})。"
+            f"请检查 X_norm 是否含有全常数列（std=0 会导致 NaN）。"
+        )
     np.fill_diagonal(corr, 0.0)
 
     mb_mask = np.zeros((d, d), dtype=np.float32)
@@ -379,7 +384,7 @@ def _compute_mb_mask(X_norm, keep_ratio=0.5):
     return mb_mask
 
 
-def train_mb_cuts_real(X_all, topo_mask, verbose=True):
+def train_mb_cuts_real(X_all, topo_mask, verbose=True, epochs=None):
     """
     MB-CUTS 三阶段训练（真实数据版）。
 
@@ -392,9 +397,11 @@ def train_mb_cuts_real(X_all, topo_mask, verbose=True):
         X_all:     (T, d) 包含 y_grade 的完整数据
         topo_mask: (d, d) numpy 物理拓扑掩码
         verbose:   是否打印进度
+        epochs:    Stage 3 训练轮数（None 则使用全局 EPOCHS）
     返回:
         训练后的 NTS_NOTEARSNet 模型
     """
+    eff_epochs = epochs if epochs is not None else EPOCHS
     d = X_all.shape[1]
     X_norm = (X_all - X_all.mean(axis=0)) / (X_all.std(axis=0) + 1e-8)
     wx, wy = build_windows(X_norm)
@@ -450,7 +457,7 @@ def train_mb_cuts_real(X_all, topo_mask, verbose=True):
         model_fine.W.data = torch.tensor(adj_rough * 0.1, dtype=torch.float32, device=DEVICE)
     opt_fine = optim.Adam(model_fine.parameters(), lr=LR)
 
-    for epoch in range(EPOCHS):
+    for epoch in range(eff_epochs):
         total_loss = 0.0
         for b_x, b_y in loader:
             opt_fine.zero_grad()
@@ -465,7 +472,7 @@ def train_mb_cuts_real(X_all, topo_mask, verbose=True):
             opt_fine.step()
             total_loss += loss.item()
         if verbose and (epoch + 1) % 10 == 0:
-            print(f"  [MB-CUTS] Epoch {epoch+1}/{EPOCHS}  Loss={total_loss/len(loader):.4f}")
+            print(f"  [MB-CUTS] Epoch {epoch+1}/{eff_epochs}  Loss={total_loss/len(loader):.4f}")
 
     if verbose:
         print("  [MB-CUTS] 三阶段完成")
@@ -515,7 +522,7 @@ def extract_adj_and_save(model, valid_vars, topo_mask, line, algo_name, threshol
         pcts = np.percentile(nonzero, [25, 50, 75, 90, 95])
         print(f"  [{algo_name}] W 非零权重分位数 [25,50,75,90,95]: {pcts.round(4)}")
     else:
-        print(f"  [{algo_name}] 警告：邻接矩阵全零，请降低阈值或检查训练过程")
+        print(f"  [{algo_name}] 警告：训练后邻接矩阵全零，请检查训练过程或调整超参数")
 
     # 构建 DiGraph
     G = nx.DiGraph()
@@ -556,13 +563,17 @@ def extract_adj_and_save(model, valid_vars, topo_mask, line, algo_name, threshol
 
 # ─── 主函数 ──────────────────────────────────────────────────────────────────
 
-def run_all(line="xin1"):
+def run_all(line="xin1", epochs=None, threshold=None):
     """
     对单条产线运行全部三种创新算法并输出 GraphML。
 
     参数:
-        line: 'xin1' 或 'xin2'
+        line:      'xin1' 或 'xin2'
+        epochs:    训练轮数（None 则使用全局默认 EPOCHS）
+        threshold: 邻接矩阵阈值（None 则使用全局默认 DEFAULT_THRESHOLD）
     """
+    eff_epochs = epochs if epochs is not None else EPOCHS
+    eff_threshold = threshold if threshold is not None else DEFAULT_THRESHOLD
     print(f"\n{'='*70}")
     print(f"创新算法真实数据因果发现  [产线={line}]  设备={DEVICE}")
     print(f"{'='*70}")
@@ -587,8 +598,11 @@ def run_all(line="xin1"):
     # ── BiAttn-CUTS ──────────────────────────────────────────────────────────
     print(f"\n--- 训练 BiAttn-CUTS ---")
     model_biattn = BiAttnCUTSNet(d).to(DEVICE)
-    model_biattn = train_with_topo_mask(model_biattn, X_all, topo_mask, algo_name="BiAttn-CUTS")
-    extract_adj_and_save(model_biattn, valid_vars, topo_mask, line, "biattn_cuts")
+    model_biattn = train_with_topo_mask(
+        model_biattn, X_all, topo_mask, epochs=eff_epochs, algo_name="BiAttn-CUTS"
+    )
+    extract_adj_and_save(model_biattn, valid_vars, topo_mask, line, "biattn_cuts",
+                         threshold=eff_threshold)
     del model_biattn
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
@@ -597,8 +611,11 @@ def run_all(line="xin1"):
     # ── MultiScale-NTS ────────────────────────────────────────────────────────
     print(f"\n--- 训练 MultiScale-NTS ---")
     model_ms = MultiScaleNTSNet(d).to(DEVICE)
-    model_ms = train_with_topo_mask(model_ms, X_all, topo_mask, algo_name="MultiScale-NTS")
-    extract_adj_and_save(model_ms, valid_vars, topo_mask, line, "multiscale_nts")
+    model_ms = train_with_topo_mask(
+        model_ms, X_all, topo_mask, epochs=eff_epochs, algo_name="MultiScale-NTS"
+    )
+    extract_adj_and_save(model_ms, valid_vars, topo_mask, line, "multiscale_nts",
+                         threshold=eff_threshold)
     del model_ms
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
@@ -606,8 +623,9 @@ def run_all(line="xin1"):
 
     # ── MB-CUTS ───────────────────────────────────────────────────────────────
     print(f"\n--- 训练 MB-CUTS ---")
-    model_mb = train_mb_cuts_real(X_all, topo_mask, verbose=True)
-    extract_adj_and_save(model_mb, valid_vars, topo_mask, line, "mb_cuts")
+    model_mb = train_mb_cuts_real(X_all, topo_mask, verbose=True, epochs=eff_epochs)
+    extract_adj_and_save(model_mb, valid_vars, topo_mask, line, "mb_cuts",
+                         threshold=eff_threshold)
     del model_mb
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
@@ -643,12 +661,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # 允许命令行覆盖全局超参数
-    if args.epochs != EPOCHS:
-        EPOCHS = args.epochs
-    if args.threshold != DEFAULT_THRESHOLD:
-        DEFAULT_THRESHOLD = args.threshold
-
     lines = ["xin1", "xin2"] if args.line == "both" else [args.line]
     for ln in lines:
-        run_all(ln)
+        run_all(ln, epochs=args.epochs, threshold=args.threshold)
