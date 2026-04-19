@@ -7,21 +7,24 @@ run_collinearity_detection.py
 """
 
 import os
+import re
 import sys
 import glob
 import time
+import logging
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 import warnings
 
 warnings.filterwarnings("ignore")
 
-import builtins
-def print(*args, **kwargs):
-    kwargs['flush'] = True
-    builtins.print(*args, **kwargs)
+logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stdout)
+log = logging.getLogger(__name__)
+
+MIN_SAMPLES = 50
 
 # ─── 路径配置 ───
 BASE_DIR = r"C:\backup\doubleml"
@@ -41,7 +44,6 @@ def load_stage_dict():
     for f in csv_files:
         basename = os.path.basename(f).lower()
         if "stage_unknown" in basename: continue
-        import re
         match = re.search(r"stage_(\d+)", basename)
         if match:
             stage_num = int(match.group(1))
@@ -67,64 +69,78 @@ def load_abc_metadata():
                 "Group": str(row.get("Group", "C")).strip(),
                 "change_count": float(row.get("change_count", 0))
             }
-        print(f"  从 ABC 文件中识别到 {len(meta)} 个 Active 变量。")
+        log.info(f"  从 ABC 文件中识别到 {len(meta)} 个 Active 变量。")
         return meta
     except Exception as e:
-        print(f"警告：无法读取 ABC 分类文件 {ABC_CSV}: {e}")
+        log.info(f"警告：无法读取 ABC 分类文件 {ABC_CSV}: {e}")
         return {}
 
 def main():
-    print("="*60)
-    print("启动非线性共线性检验：全量 Active 变量 HCA 聚类提纯流程")
-    print("="*60)
+    log.info("="*60)
+    log.info("启动非线性共线性检验：全量 Active 变量 HCA 聚类提纯流程")
+    log.info("="*60)
     
     var_to_stage = load_stage_dict()
     abc_meta = load_abc_metadata()
     
-    print("[1/5] 正在从 ABC 数据库加载 Active 变量清单（绕过模型筛选）...")
+    log.info("[1/5] 正在从 ABC 数据库加载 Active 变量清单（绕过模型筛选）...")
     # 仅保留在工艺阶段分类库中且在 Parquet 数据集中存在的变量
     all_potential_vars = list(abc_meta.keys())
     
     # 预检数据列是否存在
-    print(f"  Active 候选总数: {len(all_potential_vars)} 维")
+    log.info(f"  Active 候选总数: {len(all_potential_vars)} 维")
     
     # 获取 Parquet 中的所有实际列名 (使用 pyarrow 引擎快速获取 schema)
-    import pyarrow.parquet as pq
     parquet_file = pq.ParquetFile(X_PARQUET)
     available_cols = set(parquet_file.schema.names)
     
     valid_vars = [v for v in all_potential_vars if v in available_cols and v in var_to_stage]
-    print(f"  对齐工艺库与数据文件后，最终参与聚类维度: D={len(valid_vars)}")
+    log.info(f"  对齐工艺库与数据文件后，最终参与聚类维度: D={len(valid_vars)}")
     
-    print(f"[2/5] 载入全量时序数据矩阵 (D={len(valid_vars)})...")
+    log.info(f"[2/5] 载入全量时序数据矩阵 (D={len(valid_vars)})...")
     X = pd.read_parquet(X_PARQUET, columns=valid_vars)
     
     # 时序特征下采样到 10分钟/点 以滤除传感器毫秒级的高频瞬时噪声
-    print("[3/5] 数据抗噪平滑化：应用 10min 重采样并前向填充...")
+    log.info("[3/5] 数据抗噪平滑化：应用 10min 重采样并前向填充...")
     X.index = pd.to_datetime(X.index).tz_localize(None)
     X_re = X.resample('10min').mean().ffill().bfill()
+
+    if len(X_re) < MIN_SAMPLES:
+        raise ValueError(
+            f"重采样后仅剩 {len(X_re)} 个时间点，不满足最低 {MIN_SAMPLES} 点的统计可靠性要求。"
+            "请检查数据时间范围或调整重采样频率。"
+        )
     
     if len(X_re) > 8000:
         X_re = X_re.tail(8000)
     
-    print(f"数据矩阵准备完毕 (N={len(X_re)} 时间点)。")
+    log.info(f"数据矩阵准备完毕 (N={len(X_re)} 时间点)。")
     
-    print("[4/5] 计算斯皮尔曼非线秩相关矩阵并进行凝聚多维聚类...")
+    log.info("[4/5] 计算斯皮尔曼非线秩相关矩阵并进行凝聚多维聚类...")
     t0 = time.time()
+
+    # 检测并剔除标准差为零（恒定/退化）的列，避免其 NaN 相关系数被 fillna(0) 错误保留
+    std = X_re.std()
+    constant_cols = std[std < 1e-12].index.tolist()
+    if constant_cols:
+        log.info(
+            f"  警告：检测到 {len(constant_cols)} 个恒定/退化变量（标准差≈0），已自动剔除："
+            f"{constant_cols[:10]}..."
+        )
+        X_re = X_re.drop(columns=constant_cols)
+        constant_set = set(constant_cols)
+        valid_vars = [v for v in valid_vars if v not in constant_set]
+
     corr_matrix = X_re.corr(method='spearman').fillna(0)
     
     # 转化为对角线为 0 的绝对距离矩阵
     dist_matrix = 1 - np.abs(corr_matrix.values)
     
     # --- 跨组隔离：不同 Group (A/B/C) 之间严禁合并 ---
-    print("  应用业务规则：跨组别变量隔离（不同组距离强制设为最大）...")
-    for i in range(len(valid_vars)):
-        g_i = abc_meta.get(valid_vars[i], {}).get("Group", "C")
-        for j in range(i + 1, len(valid_vars)):
-            g_j = abc_meta.get(valid_vars[j], {}).get("Group", "C")
-            if g_i != g_j:
-                dist_matrix[i, j] = 2.0
-                dist_matrix[j, i] = 2.0
+    log.info("  应用业务规则：跨组别变量隔离（不同组距离强制设为最大）...")
+    groups = np.array([abc_meta.get(v, {}).get("Group", "C") for v in valid_vars])
+    cross_group_mask = groups[:, None] != groups[None, :]
+    dist_matrix[cross_group_mask] = 2.0
 
     dist_matrix = np.clip(dist_matrix, 0, 2)
     np.fill_diagonal(dist_matrix, 0)
@@ -135,10 +151,10 @@ def main():
     # 显著增加聚类强度，大幅精简冗余变量
     THRESHOLD = 0.20
     cluster_labels = fcluster(Z, t=THRESHOLD, criterion='distance')
-    print(f"聚类分析完成，计算耗时 {time.time()-t0:.1f} 秒！")
+    log.info(f"聚类分析完成，计算耗时 {time.time()-t0:.1f} 秒！")
     
     # --- 整理聚合分析结果 ---
-    print("[5/5] 正在生成共线集群识别清单与代表变量选择...")
+    log.info("[5/5] 正在生成共线集群识别清单与代表变量选择...")
     
     cluster_dict = {}
     for i, var in enumerate(valid_vars):
@@ -193,11 +209,11 @@ def main():
     rep_df = pd.DataFrame({"Non_Collinear_Representative": representatives, "Mapped_Stage": [var_to_stage.get(v) for v in representatives]})
     rep_df.to_csv(CLEAN_VARS_PATH, index=False, encoding="utf-8-sig")
     
-    print("\n" + "="*60)
-    print(f"大功告成！完美过滤得到了 {len(representatives)} 维最能打的无共线“铁血矩阵指纹”。")
-    print(f"分析报告 (.md文稿) 已经写入: {REPORT_PATH}")
-    print(f"最新清洗出来的提纯特征字段名单写入: {CLEAN_VARS_PATH}")
-    print("="*60)
+    log.info("\n" + "="*60)
+    log.info(f"大功告成！完美过滤得到了 {len(representatives)} 维最能打的无共线“铁血矩阵指纹”。")
+    log.info(f"分析报告 (.md文稿) 已经写入: {REPORT_PATH}")
+    log.info(f"最新清洗出来的提纯特征字段名单写入: {CLEAN_VARS_PATH}")
+    log.info("="*60)
 
 if __name__ == "__main__":
     main()
