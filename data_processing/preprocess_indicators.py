@@ -176,13 +176,13 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
         return df_values
 
     # ── 策略 C：检测多个小表块（以全 NaN 列分隔）────────────────────────────
-    all_nan_cols = [c for c in df_raw.columns if df_raw[c].isna().all()]
-    if all_nan_cols:
+    # 使用整数索引定位分隔列，避免同名列（如多个 ""）导致 .index() 永远返回第一个的问题
+    nan_indices = [i for i, _ in enumerate(df_raw.columns) if df_raw.iloc[:, i].isna().all()]
+    if nan_indices:
         blocks = []
         cols = list(df_raw.columns)
         start_idx = 0
-        for nan_col in all_nan_cols:
-            sep_idx = cols.index(nan_col)
+        for sep_idx in nan_indices:
             block_cols = cols[start_idx:sep_idx]
             if block_cols:
                 block_df = _parse_sheet_as_dataframe(df_raw[block_cols])

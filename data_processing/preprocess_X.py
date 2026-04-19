@@ -397,7 +397,8 @@ def process_batch_dir(
 
         parts = process_single_excel(fpath, whitelist)
         for tag, s in parts.items():
-            accumulated[tag].append(s)
+            # 提前重采样到目标频率，避免将原始高频数据全部堆入内存
+            accumulated[tag].append(s.resample(RESAMPLE_FREQ).mean().astype(np.float32))
 
         if (i + 1) % 50 == 0:
             gc.collect()
