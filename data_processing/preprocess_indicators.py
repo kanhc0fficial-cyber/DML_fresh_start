@@ -177,7 +177,8 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # ── 策略 C：检测多个小表块（以全 NaN 列分隔）────────────────────────────
     # 使用整数索引定位分隔列，避免同名列（如多个 ""）导致 .index() 永远返回第一个的问题
-    nan_indices = [i for i, _ in enumerate(df_raw.columns) if df_raw.iloc[:, i].isna().all()]
+    _all_nan_mask = df_raw.isna().all()
+    nan_indices = [i for i, is_all_nan in enumerate(_all_nan_mask) if is_all_nan]
     if nan_indices:
         blocks = []
         cols = list(df_raw.columns)
