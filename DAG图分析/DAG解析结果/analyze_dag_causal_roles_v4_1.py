@@ -1,32 +1,38 @@
 """
-analyze_dag_causal_roles.py (v4.1 - 修复碰撞节点检测的组合爆炸问题)
+analyze_dag_causal_roles.py (v4.2 - 双产线支持 + 兼容 annotated CSV 格式)
 ========================================================
 通用 DAG 因果角色解析脚本（支持命令行参数）
 
-核心改进（v4.1，相对于 v4.0）：
-  1. ✅ 修复碰撞节点检测：彻底移除 `all_simple_paths` 无向图遍历
-         原实现：在 G.to_undirected() 上调用 all_simple_paths(cutoff=8)
-         问题：无向图上路径数量可达数亿条，导致脚本"卡死"，try-except 无法救场
-         新实现：collider_set = t_descendants & y_descendants（纯集合交集，O(1) 可达）
-         语义说明：新定义捕捉"T 和 Y 的共同后代"，比 Pearl 路径级碰撞定义更宽泛，
-                   在 DML 控制变量选择中更保守（多报漏报），工程上是合理的。
+核心改进（v4.2，相对于 v4.1）：
+  1. ✅ 双产线支持：新增 --line 参数（xin1/xin2），自动按 Group 过滤变量
+       - xin1: Group A（新1专线）+ Group C（公用），目标 Y = y_fx_xin1
+       - xin2: Group B（新2专线）+ Group C（公用），目标 Y = y_fx_xin2
+       - 两条浮选产线各自独立分析，互不干扰
+  2. ✅ 兼容 annotated CSV 格式：同时支持两种元数据 CSV 输入
+       - 新格式（annotated）：Variable_Name, Stage_ID, Stage_Name, Description_CN,
+         Unit, Expert_Review, Keep_Remove, Group, Group_Reason, change_count, change_status
+       - 旧格式（operability）：包含 Operability / Operability_Reason 列
+       - 当缺少 Operability 列时，自动以图中所有有效变量作为候选 Treatment
+  3. ✅ 跨平台路径：移除 Windows 硬编码路径，支持自动检测项目根目录
+  4. ✅ 修复 Y_CANDIDATES：添加 y_fx_xin1（之前仅有 y_fx_xin2）
 
-v4.0 已有改进（保留）：
-  1. ✅ 移除 cutoff 机制：所有祖先/后代/路径计算均使用全图
-  2. ✅ 修复中介变量检测：使用 descendants(T) ∩ ancestors(Y) 替代 all_simple_paths
-  3. ✅ 修复混杂因子检测：G_without_T 仅在循环外复制一次
-  4. ✅ 修复版本号不一致问题
-  5. ✅ 修复异常处理：移除永远不会触发的 NetworkXNoPath 捕获
-  6. ✅ DAG 有效性检查、严格 Y 节点定位、命令行参数支持
+v4.1 已有改进（保留）：
+  1. ✅ 修复碰撞节点检测：彻底移除 `all_simple_paths` 无向图遍历
+         新实现：collider_set = t_descendants & y_descendants（纯集合交集，O(1) 可达）
+  2. ✅ 移除 cutoff 机制：所有祖先/后代/路径计算均使用全图
+  3. ✅ 修复中介变量检测：使用 descendants(T) ∩ ancestors(Y) 替代 all_simple_paths
+  4. ✅ 修复混杂因子检测：G_without_T 仅在循环外复制一次
+  5. ✅ DAG 有效性检查、严格 Y 节点定位、命令行参数支持
 
 操作变量（T）判定方式：
-  - 读取 non_collinear_representative_vars_operability.csv
-  - 仅当 Operability == 'operable' 的变量，才视为可操作干预变量 (T)
+  - 优先方式：读取含 Operability 列的 CSV，取 Operability == 'operable' 的变量
+  - 备用方式：若 CSV 无 Operability 列，以图中所有有效变量作为候选 Treatment
+  - 按 --line 参数过滤 Group：xin1 只保留 A+C，xin2 只保留 B+C
 
 因果角色定义（基于 Pearl SCM + 路径分析）：
   - 混杂因子：C ∈ ancestors(T)，C ∉ descendants(T)，且移除 T 后 C 仍可达 Y（后门路径）
   - 中介变量：M ∈ descendants(T) ∩ ancestors(Y)，M ≠ T，M ≠ Y
-  - 碰撞节点：Z ∈ descendants(T) ∩ descendants(Y)（T 和 Y 的共同后代，v4.1 修正定义）
+  - 碰撞节点：Z ∈ descendants(T) ∩ descendants(Y)（T 和 Y 的共同后代）
   - 工具变量：IV ∈ ancestors(T)，且移除 T 后 IV 与 Y 全局不连通（排他性）
 
 用法：
@@ -36,14 +42,16 @@ v4.0 已有改进（保留）：
     graphml_path          GraphML 文件的绝对路径
 
   可选参数：
-    --operability-csv     可操作性元数据 CSV 路径（默认：自动查找）
+    --line                产线选择 xin1/xin2（必需，指定分析哪条浮选产线）
+    --var-csv             变量元数据 CSV 路径（支持 annotated 或 operability 格式）
     --output-dir          输出目录（默认：与 GraphML 同目录）
     --y-node              目标变量名称（默认：自动检测）
     --verbose             详细输出模式
 
 示例：
-  python analyze_dag_causal_roles.py "C:/path/to/dag.graphml"
-  python analyze_dag_causal_roles.py "C:/path/to/dag.graphml" --y-node "y_grade" --verbose
+  python analyze_dag_causal_roles.py dag_xin1.graphml --line xin1
+  python analyze_dag_causal_roles.py dag_xin2.graphml --line xin2 --verbose
+  python analyze_dag_causal_roles.py dag.graphml --line xin1 --var-csv vars_annotated.csv
 """
 
 import os
@@ -56,35 +64,109 @@ from pathlib import Path
 # ─────────────────────────────────────────────────────────────────────────────
 # 默认配置
 # ─────────────────────────────────────────────────────────────────────────────
-DEFAULT_PROJECT_ROOT = r"C:\DML_fresh_start"
-DEFAULT_OPERABILITY_CSV = os.path.join(
-    DEFAULT_PROJECT_ROOT, "数据预处理",
-    "数据与处理结果-分阶段-去共线性后",
-    "non_collinear_representative_vars_operability.csv",
-)
+# 自动检测项目根目录：优先使用脚本所在目录的上两级
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", ".."))
+
+# 默认变量元数据 CSV 路径（支持 annotated 或 operability 格式）
+# 先尝试 operability，再尝试 annotated
+_CSV_CANDIDATES = [
+    os.path.join(
+        DEFAULT_PROJECT_ROOT, "数据预处理",
+        "数据与处理结果-分阶段-去共线性后",
+        "non_collinear_representative_vars_operability.csv",
+    ),
+    os.path.join(
+        DEFAULT_PROJECT_ROOT, "数据预处理",
+        "数据与处理结果-分阶段-去共线性后",
+        "non_collinear_representative_vars_annotated.csv",
+    ),
+]
+
+def _find_default_var_csv():
+    """自动查找默认变量元数据 CSV"""
+    for p in _CSV_CANDIDATES:
+        if os.path.exists(p):
+            return p
+    return _CSV_CANDIDATES[0]  # 返回首选路径（即使不存在，后续会报错提示）
+
+
+# 产线 -> 允许的 Group 集合
+LINE_TO_GROUPS = {
+    "xin1": {"A", "C"},
+    "xin2": {"B", "C"},
+}
+
+# 产线 -> Y 列名映射（原始数据中的 Y 列名，供参考）
+LINE_TO_Y_COL = {
+    "xin1": "y_fx_xin1",
+    "xin2": "y_fx_xin2",
+}
 
 # 目标变量候选名称（按优先级排序）
-Y_CANDIDATES = ["y_grade", "Y_grade", "y_fx_xin2", "target", "outcome"]
+# 因果发现脚本中 Y 统一命名为 "y_grade"（小写）或 "Y_grade"（大写）
+# 也支持原始 Y 列名 y_fx_xin1 / y_fx_xin2
+Y_CANDIDATES = ["y_grade", "Y_grade", "y_fx_xin1", "y_fx_xin2", "target", "outcome"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 工具函数
 # ─────────────────────────────────────────────────────────────────────────────
 
-def load_operability(csv_path):
+def load_variable_metadata(csv_path, line=None):
     """
-    读取可操作性元数据。
-    返回两个字典:
+    读取变量元数据 CSV（兼容 annotated 和 operability 两种格式）。
+
+    annotated CSV 格式（sync_group_to_annotated.py 输出）：
+      Variable_Name, Stage_ID, Stage_Name, Description_CN, Unit,
+      Expert_Review, Keep_Remove, Group, Group_Reason, change_count, change_status
+
+    operability CSV 格式（classify_operability.py 输出，在 annotated 基础上增加）：
+      ... + Operability, Operability_Reason
+
+    参数：
+      csv_path: CSV 文件路径
+      line: 产线标识 'xin1'/'xin2'，用于按 Group 过滤变量
+            xin1 = Group A + C，xin2 = Group B + C
+
+    返回三个值:
       meta_lookup:   {变量名 -> {stage, group, desc, operability, reason}}
-      operable_set:  所有 Operability == 'operable' 的变量名集合
+      operable_set:  所有被判定为可操作变量（Treatment）的变量名集合
+      has_operability: bool, CSV 中是否包含 Operability 列
     """
     if not os.path.exists(csv_path):
-        print(f"[警告] 可操作性文件未找到: {csv_path}")
+        print(f"[警告] 变量元数据文件未找到: {csv_path}")
         print(f"       将无法提供变量元数据信息")
-        return {}, set()
+        return {}, set(), False
 
     df = pd.read_csv(csv_path, encoding="utf-8-sig")
     df.columns = [c.strip() for c in df.columns]
+
+    has_operability = "Operability" in df.columns
+    has_group = "Group" in df.columns
+
+    if not has_operability:
+        print(f"[信息] CSV 中无 Operability 列，将以图中所有有效变量作为候选 Treatment")
+
+    # 按产线 Group 过滤
+    if line and has_group:
+        allowed_groups = LINE_TO_GROUPS.get(line)
+        if allowed_groups:
+            before_count = len(df)
+            df = df[df["Group"].isin(allowed_groups)].copy()
+            print(f"[产线过滤] line={line}, 允许 Group={allowed_groups}: "
+                  f"{before_count} -> {len(df)} 个变量")
+
+    # 按 Keep_Remove 过滤（如果列存在）
+    if "Keep_Remove" in df.columns:
+        df = df[df["Keep_Remove"] == "keep"].copy()
+
+    # 按 change_status 过滤（如果列存在）：保留 Active 和 Unknown
+    if "change_status" in df.columns:
+        df = df[
+            (df["change_status"] == "Active") |
+            (df["change_status"] == "Unknown")
+        ].copy()
 
     meta_lookup = {}
     operable_set = set()
@@ -93,18 +175,27 @@ def load_operability(csv_path):
         var = str(row.get("Variable_Name", "")).strip()
         if not var:
             continue
-        operability = str(row.get("Operability", "")).strip().lower()
+
+        # 读取 operability（优先使用 CSV 列，否则标记为 unknown）
+        if has_operability:
+            operability = str(row.get("Operability", "")).strip().lower()
+        else:
+            operability = "unknown"
+
+    # 读取 Operability_Reason（operability CSV 特有）或 Group_Reason（annotated CSV 特有）
+    # 两种格式互斥：operability CSV 有 Operability_Reason，annotated CSV 有 Group_Reason
         meta_lookup[var] = {
             "stage":       row.get("Stage_ID", "?"),
             "group":       str(row.get("Group", "?")).strip(),
             "desc":        str(row.get("Description_CN", "")).strip(),
             "operability": operability,
-            "reason":      str(row.get("Operability_Reason", "")).strip(),
+            "reason":      str(row.get("Operability_Reason",
+                                       row.get("Group_Reason", ""))).strip(),
         }
-        if operability == "operable":
+        if has_operability and operability == "operable":
             operable_set.add(var)
 
-    return meta_lookup, operable_set
+    return meta_lookup, operable_set, has_operability
 
 
 def resolve_y_node(G, y_node_override=None, verbose=False):
@@ -324,16 +415,14 @@ def get_meta_str(node, meta_lookup, verbose=False):
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="通用 DAG 因果角色解析脚本（v4.1 - 修复碰撞节点组合爆炸问题）",
+        description="通用 DAG 因果角色解析脚本（v4.2 - 双产线支持 + 兼容 annotated CSV）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法：
-  python %(prog)s "C:/path/to/dag.graphml"
-  python %(prog)s "C:/path/to/dag.graphml" --y-node "y_grade"
-  python %(prog)s "C:/path/to/dag.graphml" --verbose
-  python %(prog)s "C:/path/to/dag.graphml" \\
-      --operability-csv "C:/path/to/operability.csv" \\
-      --output-dir "C:/path/to/output"
+  python %(prog)s dag_xin1.graphml --line xin1
+  python %(prog)s dag_xin2.graphml --line xin2 --verbose
+  python %(prog)s dag.graphml --line xin1 --var-csv vars_annotated.csv
+  python %(prog)s dag.graphml --line xin2 --y-node "y_grade" --verbose
         """,
     )
 
@@ -344,10 +433,28 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--line",
+        type=str,
+        required=True,
+        choices=["xin1", "xin2"],
+        help="产线选择（必需）: xin1=新1#浮选产线(Group A+C), xin2=新2#浮选产线(Group B+C)",
+    )
+
+    parser.add_argument(
+        "--var-csv",
+        type=str,
+        default=None,
+        dest="var_csv",
+        help="变量元数据 CSV 路径，支持 annotated 或 operability 格式（默认：自动查找）",
+    )
+
+    # 保留旧参数名作为别名，向后兼容
+    parser.add_argument(
         "--operability-csv",
         type=str,
         default=None,
-        help=f"可操作性元数据 CSV 路径（默认：{DEFAULT_OPERABILITY_CSV}）",
+        dest="operability_csv_compat",
+        help=argparse.SUPPRESS,  # 隐藏，向后兼容
     )
 
     parser.add_argument(
@@ -370,7 +477,13 @@ def parse_args():
         help="详细输出模式",
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    # 处理向后兼容：--operability-csv 映射到 var_csv
+    if args.var_csv is None and args.operability_csv_compat is not None:
+        args.var_csv = args.operability_csv_compat
+
+    return args
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -380,25 +493,35 @@ def parse_args():
 def generate_reports(
     G, y_node, y_has_edges, t_nodes_in_graph, t_nodes_not_in_graph,
     operable_set, meta_lookup, output_dir, graphml_path, verbose,
+    line=None, has_operability=False,
 ):
     """生成文本报告和 CSV 文件"""
     W = 138
 
+    line_desc = {
+        "xin1": "新1#浮选产线 (Group A+C, Y=y_fx_xin1)",
+        "xin2": "新2#浮选产线 (Group B+C, Y=y_fx_xin2)",
+    }
+
     rep = []
     rep.append("=" * W)
-    rep.append("  DAG 因果角色解析报告 (v4.1 - 修复碰撞节点组合爆炸问题)")
+    rep.append("  DAG 因果角色解析报告 (v4.2 - 双产线支持)")
     rep.append("=" * W)
     rep.append(f"  GraphML 来源  : {graphml_path}")
+    rep.append(f"  分析产线      : {line} — {line_desc.get(line, '未知')}")
     rep.append(f"  图规模        : {len(G.nodes)} 节点  {len(G.edges)} 有向边")
     rep.append(f"  目标变量 Y    : {y_node}  (入度={G.in_degree(y_node)})")
-    rep.append(f"  专家认定 operable 变量总数 : {len(operable_set)}")
+    if has_operability:
+        rep.append(f"  操作变量来源  : CSV Operability 列（operable 变量共 {len(operable_set)} 个）")
+    else:
+        rep.append(f"  操作变量来源  : 图中所有有效变量（CSV 无 Operability 列，共 {len(operable_set)} 个候选）")
     rep.append(f"  其中在本图中出现           : {len(t_nodes_in_graph)} 个")
     rep.append(f"  路径检测方式               : 全图祖先/后代集合运算（v4.1）")
     rep.append("")
 
     # ── 一、operable 变量总览表 ──────────────────────────────────────────
     rep.append("-" * W)
-    rep.append("  【一】专家认定 Operable 操作变量总览（在图中出现情况）")
+    rep.append("  【一】候选操作变量总览（在图中出现情况）")
     rep.append("-" * W)
     rep.append(f"  {'变量名':<40} {'在图中':^6} {'直接->Y':^7} {'Stage':>5} {'Group':>5} {'描述'}")
     rep.append(f"  {'-'*40} {'-'*6} {'-'*7} {'-'*5} {'-'*5} {'-'*28}")
@@ -417,7 +540,7 @@ def generate_reports(
     # ── 不在图中的 operable 变量 ─────────────────────────────────────────
     if t_nodes_not_in_graph:
         rep.append("-" * W)
-        rep.append("  【注意】以下 operable 变量未出现在图中（算法未检测到因果关系）：")
+        rep.append("  【注意】以下候选操作变量未出现在图中（算法未检测到因果关系）：")
         rep.append("-" * W)
         for var in t_nodes_not_in_graph:
             _, _, _, desc = get_meta_str(var, meta_lookup, verbose=verbose)
@@ -426,23 +549,13 @@ def generate_reports(
 
     # ── 二、Pearl SCM 角色分析 ───────────────────────────────────────────
     rep.append("=" * W)
-    rep.append("  【二】Pearl SCM 因果角色分析（v4.1）")
+    rep.append("  【二】Pearl SCM 因果角色分析（v4.2）")
     rep.append("=" * W)
-    rep.append("  角色定义（基于 Pearl 结构因果模型，v4.1 修正）：")
+    rep.append("  角色定义（基于 Pearl 结构因果模型）：")
     rep.append("    - 混杂因子：C ∈ ancestors(T)，C ∉ descendants(T)，移除 T 后 C 仍可达 Y")
     rep.append("    - 中介变量：M ∈ descendants(T) ∩ ancestors(Y)，M ≠ T，M ≠ Y")
     rep.append("    - 碰撞节点：Z ∈ descendants(T) ∩ descendants(Y)（T 和 Y 的共同后代）")
     rep.append("    - 工具变量：IV ∈ ancestors(T)，移除 T 后 IV 与 Y 全局不连通（排他性）")
-    rep.append("")
-    rep.append("  v4.1 核心改进（相对于 v4.0）：")
-    rep.append("    ✓ 碰撞节点：彻底移除 all_simple_paths 无向图遍历（组合爆炸定时炸弹）")
-    rep.append("      改为 t_descendants & y_descendants 集合交集，时间复杂度 O(V+E)")
-    rep.append("      语义扩展：新定义是 Pearl 路径级碰撞的超集，在 DML 中更保守安全")
-    rep.append("")
-    rep.append("  v4.0 已有改进（保留）：")
-    rep.append("    ✓ 移除 cutoff：所有计算使用全图，消除候选集不完整问题")
-    rep.append("    ✓ 中介变量：使用 descendants(T) ∩ ancestors(Y) 集合运算")
-    rep.append("    ✓ 混杂因子：G_without_T 仅复制一次，消除循环内重复复制")
     rep.append("")
 
     # 初始化 csv_rows
@@ -452,7 +565,7 @@ def generate_reports(
         rep.append("  [注] Y 节点在本图中无入边，Pearl 角色分析无法基于图结构推断，")
         rep.append("       请参考【一】中的直接连边情况，或降低因果发现算法阈值后重跑。")
     elif not t_nodes_in_graph:
-        rep.append("  [注] 无 operable 变量出现在图中，无法进行角色分析。")
+        rep.append("  [注] 无候选操作变量出现在图中，无法进行角色分析。")
     else:
         col_t = 38
         col_role = 14
@@ -528,7 +641,7 @@ def generate_reports(
             _add_rows("4-Instrument", inst)
 
         if not any_result:
-            rep.append("  所有 operable 变量与 Y 均无结构性因果连通，")
+            rep.append("  所有候选操作变量与 Y 均无结构性因果连通，")
             rep.append("  建议检查因果发现算法阈值或重新运行集成投票。")
 
         rep.append("  " + "-" * (W - 2))
@@ -566,7 +679,7 @@ def generate_reports(
                 "Stage":         stage,
                 "Group":         group,
                 "Description":   desc,
-                "Note":          "operable 但未出现在图中",
+                "Note":          "候选操作变量但未出现在图中",
             })
         df_miss = pd.DataFrame(miss_rows)
         miss_path = os.path.join(output_dir, f"{graphml_name}_Operable_NotInGraph.csv")
@@ -583,10 +696,11 @@ def main():
     args = parse_args()
 
     graphml_path = args.graphml_path
-    operability_csv = args.operability_csv or DEFAULT_OPERABILITY_CSV
+    var_csv = args.var_csv or _find_default_var_csv()
     output_dir = args.output_dir
     y_node_override = args.y_node
     verbose = args.verbose
+    line = args.line
 
     # 验证输入文件
     if not os.path.exists(graphml_path):
@@ -603,20 +717,32 @@ def main():
 
     os.makedirs(output_dir, exist_ok=True)
 
+    line_desc = {
+        "xin1": "新1#浮选产线 (Group A+C, Y=y_fx_xin1)",
+        "xin2": "新2#浮选产线 (Group B+C, Y=y_fx_xin2)",
+    }
+
     if verbose:
         print("=" * 80)
-        print("DAG 因果角色解析脚本 v4.1")
+        print("DAG 因果角色解析脚本 v4.2（双产线支持）")
         print("=" * 80)
         print(f"GraphML 文件: {graphml_path}")
-        print(f"可操作性 CSV: {operability_csv}")
+        print(f"变量元数据 CSV: {var_csv}")
+        print(f"分析产线:     {line} — {line_desc.get(line, '未知')}")
         print(f"输出目录:     {output_dir}")
         print(f"Y 节点:       {y_node_override or '自动检测'}")
         print("=" * 80)
 
-    # 1. 加载可操作性元数据
-    print("\n[1/6] 加载可操作性元数据...")
-    meta_lookup, operable_set = load_operability(operability_csv)
-    print(f"      元数据记录: {len(meta_lookup)} 条，其中 operable 变量: {len(operable_set)} 个")
+    # 1. 加载变量元数据（按产线 Group 过滤）
+    print(f"\n[1/6] 加载变量元数据 (产线={line})...")
+    meta_lookup, operable_set, has_operability = load_variable_metadata(
+        var_csv, line=line,
+    )
+    print(f"      元数据记录: {len(meta_lookup)} 条")
+    if has_operability:
+        print(f"      CSV 含 Operability 列，operable 变量: {len(operable_set)} 个")
+    else:
+        print(f"      CSV 无 Operability 列，将在加载图后以图中有效变量作为候选 Treatment")
 
     # 2. 加载 GraphML
     print(f"\n[2/6] 加载 GraphML 文件...")
@@ -647,20 +773,30 @@ def main():
     if not y_has_edges:
         print(f"      [警告] Y 节点无入边，可能无法进行有意义的因果分析")
 
-    # 5. 识别操作变量
+    # 5. 识别操作变量（Treatment）
     print(f"\n[5/6] 识别操作变量（Treatment）...")
+
+    if not has_operability:
+        # 无 Operability 列：以图中所有非 Y 节点且在 meta_lookup 中的变量作为候选
+        # 这是一种保守策略，确保不遗漏任何潜在的 Treatment
+        # 注意：此处完全替换 operable_set（原来为空集），而非追加
+        candidate_treatments = {n for n in G.nodes if n in meta_lookup and n != y_node}
+        operable_set = candidate_treatments
+        print(f"      [备用模式] 以图中有效变量作为候选 Treatment: {len(operable_set)} 个")
+
     t_nodes_in_graph = sorted(
         [v for v in operable_set if v in G.nodes],
         key=lambda v: meta_lookup.get(v, {}).get("stage", 99),
     )
     t_nodes_not_in_graph = sorted([v for v in operable_set if v not in G.nodes])
-    print(f"      operable 变量在图中出现: {len(t_nodes_in_graph)} 个")
-    print(f"      operable 变量不在图中:   {len(t_nodes_not_in_graph)} 个")
+    print(f"      候选操作变量在图中出现: {len(t_nodes_in_graph)} 个")
+    print(f"      候选操作变量不在图中:   {len(t_nodes_not_in_graph)} 个")
     if len(t_nodes_in_graph) == 0:
-        print(f"      [警告] 无 operable 变量出现在图中，无法进行角色分析")
+        print(f"      [警告] 无候选操作变量出现在图中，无法进行角色分析")
 
     # 6. 执行因果角色分析 & 生成报告
     print(f"\n[6/6] 执行 Pearl SCM 因果角色分析...")
+    print(f"      产线: {line} — {line_desc.get(line, '未知')}")
     print(f"      使用全图祖先/后代集合运算（v4.1）")
 
     generate_reports(
@@ -674,10 +810,12 @@ def main():
         output_dir=output_dir,
         graphml_path=graphml_path,
         verbose=verbose,
+        line=line,
+        has_operability=has_operability,
     )
 
     print(f"\n{'='*80}")
-    print(f"分析完成！结果已保存至: {output_dir}")
+    print(f"分析完成！产线={line}，结果已保存至: {output_dir}")
     print(f"{'='*80}")
 
 
