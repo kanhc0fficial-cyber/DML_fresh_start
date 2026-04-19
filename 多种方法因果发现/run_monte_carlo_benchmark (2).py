@@ -8,7 +8,6 @@ run_monte_carlo_benchmark.py  [DML-CQS 增强版]
   [DML2] run_single_experiment 新增 DML-CQS 三子指标及综合得分
   [DML3] 统计报告、Markdown 报告、对比表均包含 DML-CQS 列
   [DML4] generate_comparison_report 新增"DML 控制质量"专栏
-  [DML5] 新增 generate_role_distribution_report 输出角色识别分布图（文字热图）
 
 修正清单（沿用修正版）：
   [B1-B6] 同修正版，不再重复注释
@@ -30,9 +29,17 @@ from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
 
-# [DML1] 引入新指标模块
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# [DML1] 引入新指标模块（与本文件同目录）
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_parent_dir = os.path.dirname(_this_dir)
+# dml_causal_metrics.py 在本文件所在目录
+sys.path.insert(0, _this_dir)
 from dml_causal_metrics import compute_dml_cqs_multi
+
+# synthetic_dag_generator.py 在兄弟目录"因果的发现算法理论验证"下
+_dag_gen_dir = os.path.join(_parent_dir, "因果的发现算法理论验证")
+if _dag_gen_dir not in sys.path:
+    sys.path.insert(0, _dag_gen_dir)
 
 from synthetic_dag_generator import (
     SyntheticDAGGenerator,

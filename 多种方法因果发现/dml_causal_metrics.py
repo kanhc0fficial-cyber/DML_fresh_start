@@ -35,7 +35,7 @@ dml_causal_metrics.py
 from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass, field
-from typing import Dict, FrozenSet, List, Set, Tuple
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -183,7 +183,8 @@ def identify_causal_roles(
     y_backdoor_anc = get_ancestors(adj_no_t_out, outcome)  # Y 的"后门路径"祖先
 
     # 混杂：T 和 Y 的共同祖先，且在删除 T 出边后仍能到达 Y（= 有后门路径）
-    confounders = frozenset((t_anc & y_backdoor_anc) & all_vars - mediators - colliders)
+    # 注意：Python 运算符优先级 `-` > `&`，加显式括号确保可读性与正确性一致
+    confounders = frozenset(((t_anc & y_backdoor_anc) & all_vars) - mediators - colliders)
 
     # 工具：T 的祖先，且在删除 T 出边后无法到达 Y（= 只能通过 T 影响 Y）
     instruments = frozenset((t_anc - y_backdoor_anc) & all_vars)
@@ -241,8 +242,8 @@ class DMLCQSResult:
     n_pred_instruments:  int = 0
 
     # 角色分类（供可视化）
-    true_roles: CausalRoles = field(default=None)
-    pred_roles: CausalRoles = field(default=None)
+    true_roles: Optional[CausalRoles] = field(default=None)
+    pred_roles: Optional[CausalRoles] = field(default=None)
 
 
 def compute_dml_cqs(
@@ -271,7 +272,7 @@ def compute_dml_cqs(
     ----
     DMLCQSResult 数据类，含三个子指标和综合得分
     """
-    adj_true_bin = binarize(adj_true, threshold=0.05)  # 真实图直接二值
+    adj_true_bin = binarize(adj_true, threshold=threshold)  # 真实图二值化（与预测图使用相同阈值）
     adj_pred_bin = binarize(adj_pred, threshold=threshold)
 
     true_roles = identify_causal_roles(adj_true_bin, treatment, outcome)
