@@ -77,17 +77,28 @@ except ImportError:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  路径配置（与原版完全一致）
+#  路径配置（基于仓库根目录，自动适配 Linux / Windows / macOS）
 # ═══════════════════════════════════════════════════════════════════
-DATA_DIR        = r"C:\DML_fresh_start\数据存储"
-X_PARQUET       = os.path.join(DATA_DIR, "X_features_new.parquet")
-Y_CSV           = os.path.join(DATA_DIR, "y_target_new.csv")
-OPERABILITY_CSV = (
-    r"C:\DML_fresh_start\数据预处理"
-    r"\数据与处理结果-分阶段-去共线性后"
-    r"\non_collinear_representative_vars_operability.csv"
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))       # 反驳性实验/
+REPO_ROOT = os.path.dirname(BASE_DIR)                        # 仓库根目录
+DATA_DIR  = os.path.join(REPO_ROOT, "data")                  # data/
+
+# ── 新数据管线产物（由 data_processing/ 脚本生成）─────────────────
+#   优先读取 merge_final.py 输出的已对齐建模宽表；
+#   若不存在，则回退到 X + Y 分别读取并在脚本内对齐。
+MODELING_DATASET_XIN2 = os.path.join(DATA_DIR, "modeling_dataset_xin2_final.parquet")
+X_PARQUET             = os.path.join(DATA_DIR, "X_features_final.parquet")
+Y_PARQUET             = os.path.join(DATA_DIR, "y_target_final.parquet")
+
+# ── 操作性分类表（classify_operability.py 输出）──────────────────
+#   可通过 --operability-csv 命令行参数覆盖
+DEFAULT_OPERABILITY_CSV = os.path.join(
+    REPO_ROOT, "数据预处理",
+    "数据与处理结果-分阶段-去共线性后",
+    "non_collinear_representative_vars_operability.csv",
 )
-BASE_DIR                  = os.path.dirname(os.path.abspath(__file__))
+
+# ── 实验结果输出目录 ────────────────────────────────────────────
 PLACEBO_OUT_DIR           = os.path.join(BASE_DIR, "安慰剂实验")
 RANDOM_CONFOUNDER_OUT_DIR = os.path.join(BASE_DIR, "随机混杂变量实验")
 DATA_SUBSET_OUT_DIR       = os.path.join(BASE_DIR, "数据子集实验")
@@ -133,7 +144,7 @@ SIGN_RATE_MIN   = 0.70   # 符号一致率低于此值视为不可信
 # 默认路径：DAG 分析脚本输出的角色明细 CSV
 # 用户可通过 --dag-roles-csv 覆盖
 DEFAULT_DAG_ROLES_CSV = os.path.join(
-    r"C:\DML_fresh_start\DAG图分析\DAG解析结果",
+    REPO_ROOT, "DAG图分析", "DAG解析结果",
     # 替换为实际 GraphML 文件名对应的输出，例如：
     # "xin2_dag_Roles_Table.csv"
     ""  # 留空表示未指定，回退到纯相关性筛选
@@ -788,31 +799,120 @@ def _worker_data_subset(task: dict) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════
-#  数据准备（与原版完全一致）
+#  数据准备（对接 data_processing/ 新数据管线）
 # ═══════════════════════════════════════════════════════════════════
-def build_xin2_data():
-    op_df = pd.read_csv(OPERABILITY_CSV, encoding="utf-8-sig")
+def build_xin2_data(operability_csv: str = DEFAULT_OPERABILITY_CSV):
+    """
+    加载 XIN2 产线的建模数据。
+
+    数据来源优先级：
+      1. data/modeling_dataset_xin2_final.parquet（merge_final.py --line xin2 输出）
+         → 已完成 X/Y/指标对齐，直接使用
+      2. data/X_features_final.parquet + data/y_target_final.parquet
+         → 手动对齐（与 merge_final.py 逻辑一致：±1min merge_asof）
+
+    操作性分类（operable / observable）来自 classify_operability.py 输出的 CSV，
+    包含 Group、Operability、Variable_Name 列。XIN2 对应 Group B+C。
+
+    返回：
+      (df_filtered, operable_in_df, observable_in_df)
+    """
+
+    # ── 读取操作性分类 ──────────────────────────────────────────────
+    if not os.path.exists(operability_csv):
+        raise FileNotFoundError(
+            f"操作性分类文件不存在：{operability_csv}\n"
+            f"请先运行 数据预处理/classify_operability.py 生成该文件，"
+            f"或通过 --operability-csv 指定路径。"
+        )
+    op_df = pd.read_csv(operability_csv, encoding="utf-8-sig")
     op_df["Group"] = op_df["Group"].str.strip().str.upper()
     xin2_df = op_df[op_df["Group"].isin(["B", "C"])].copy()
-    operable_set   = set(xin2_df[xin2_df["Operability"].str.strip() == "operable" ]["Variable_Name"].str.strip())
-    observable_set = set(xin2_df[xin2_df["Operability"].str.strip() == "observable"]["Variable_Name"].str.strip())
-    print(f"[数据准备] Group B+C 共 {len(operable_set|observable_set)} 个变量，"
+    operable_set   = set(
+        xin2_df[xin2_df["Operability"].str.strip() == "operable"]["Variable_Name"].str.strip()
+    )
+    observable_set = set(
+        xin2_df[xin2_df["Operability"].str.strip() == "observable"]["Variable_Name"].str.strip()
+    )
+    print(f"[数据准备] Group B+C 共 {len(operable_set | observable_set)} 个变量，"
           f"operable={len(operable_set)}，observable={len(observable_set)}")
-    X  = pd.read_parquet(X_PARQUET)
-    y  = pd.read_csv(Y_CSV, parse_dates=["time"]).dropna(subset=["y_fx_xin2"])
-    X.index   = pd.to_datetime(X.index).tz_localize(None)
-    y["time"] = y["time"].dt.tz_localize(None)
-    X_re = X.resample("10min").mean().ffill().bfill()
-    y_re = y.set_index("time")["y_fx_xin2"].resample("10min").mean().interpolate()
-    comm = X_re.index.intersection(y_re.index)
-    df   = pd.concat([X_re.loc[comm], y_re.loc[comm].rename("Y_grade")], axis=1).dropna()
-    df   = df.loc[:, (df.std() > 1e-4)]
-    valid_cols       = [c for c in df.columns if c in (operable_set|observable_set) or c == "Y_grade"]
-    df_filtered      = df[valid_cols]
+
+    # ── 路径 1：优先读取已对齐的建模宽表 ────────────────────────────
+    if os.path.exists(MODELING_DATASET_XIN2):
+        print(f"[数据准备] 读取已对齐建模宽表：{MODELING_DATASET_XIN2}")
+        df = pd.read_parquet(MODELING_DATASET_XIN2)
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        df.index.name = "time"
+
+        # Y 列：merge_final.py 输出列名为 y_fx_xin2，统一重命名为 Y_grade
+        if "y_fx_xin2" in df.columns:
+            df = df.rename(columns={"y_fx_xin2": "Y_grade"})
+        elif "Y_grade" not in df.columns:
+            raise KeyError(
+                f"建模宽表 {MODELING_DATASET_XIN2} 中未找到 'y_fx_xin2' 或 'Y_grade' 列"
+            )
+
+        # 如果存在 y_fx_xin1 列（完整宽表而非 xin2 子集），也删除以避免混入
+        if "y_fx_xin1" in df.columns:
+            df = df.drop(columns=["y_fx_xin1"])
+
+        # 剔除 Y_grade 为 NaN 的行
+        df = df.dropna(subset=["Y_grade"])
+
+    # ── 路径 2：回退到 X + Y 分别读取 ──────────────────────────────
+    elif os.path.exists(X_PARQUET) and os.path.exists(Y_PARQUET):
+        print(f"[数据准备] 未找到已对齐宽表，回退到分别读取 X + Y")
+        print(f"  X: {X_PARQUET}")
+        print(f"  Y: {Y_PARQUET}")
+
+        X = pd.read_parquet(X_PARQUET)
+        X.index = pd.to_datetime(X.index).tz_localize(None)
+        X.index.name = "time"
+        X = X.sort_index()
+
+        y = pd.read_parquet(Y_PARQUET)
+        y.index = pd.to_datetime(y.index).tz_localize(None)
+        y.index.name = "time"
+        y = y.sort_index()
+
+        if "y_fx_xin2" not in y.columns:
+            raise KeyError(f"Y 文件 {Y_PARQUET} 中未找到 'y_fx_xin2' 列")
+
+        y_xin2 = y[["y_fx_xin2"]].dropna()
+
+        # ±1min merge_asof 对齐（与 merge_final.py 一致）
+        y_reset = y_xin2.reset_index().sort_values("time")
+        X_reset = X.reset_index().rename(columns={"time": "_time_x"}).sort_values("_time_x")
+        merged = pd.merge_asof(
+            y_reset, X_reset,
+            left_on="time", right_on="_time_x",
+            direction="nearest", tolerance=pd.Timedelta("1min"),
+        )
+        if "_time_x" in merged.columns:
+            merged = merged.drop(columns=["_time_x"])
+        merged = merged.set_index("time")
+        merged = merged.rename(columns={"y_fx_xin2": "Y_grade"})
+        merged = merged.dropna(subset=["Y_grade"])
+        df = merged
+    else:
+        raise FileNotFoundError(
+            f"未找到数据文件。请先运行 data_processing/ 下的预处理脚本：\n"
+            f"  已对齐宽表（推荐）: {MODELING_DATASET_XIN2}\n"
+            f"  或分别: {X_PARQUET} + {Y_PARQUET}\n"
+            f"详见 data_processing/README.md"
+        )
+
+    # ── 列过滤 + 低方差剔除 ────────────────────────────────────────
+    df = df.loc[:, (df.std() > 1e-4)]
+    valid_cols  = [c for c in df.columns
+                   if c in (operable_set | observable_set) or c == "Y_grade"]
+    df_filtered = df[valid_cols]
+
     cols_in_df       = set(df_filtered.columns) - {"Y_grade"}
     operable_in_df   = operable_set   & cols_in_df
     observable_in_df = observable_set & cols_in_df
-    print(f"[数据准备] 实际进入 DataFrame：operable={len(operable_in_df)}，observable={len(observable_in_df)}")
+    print(f"[数据准备] 最终 DataFrame：{df_filtered.shape}，"
+          f"operable={len(operable_in_df)}，observable={len(observable_in_df)}")
     return df_filtered, operable_in_df, observable_in_df
 
 
@@ -1040,6 +1140,9 @@ def parse_args():
     p.add_argument("--dag-roles-csv", type=str, default="",
                    help="DAG 角色明细 CSV 路径（analyze_dag_causal_roles_v4_1.py 的输出）。"
                         "若不指定，回退到纯相关性筛选（与 v3 行为一致）。")
+    p.add_argument("--operability-csv", type=str, default=DEFAULT_OPERABILITY_CSV,
+                   help="操作性分类 CSV 路径（classify_operability.py 的输出，"
+                        f"默认 {DEFAULT_OPERABILITY_CSV}）。")
     return p.parse_args()
 
 
@@ -1057,7 +1160,9 @@ def main():
     print(f"   推断:   encode_mean()，不采样，确定性残差")
     print("=" * 70)
 
-    df, operable_in_df, observable_in_df = build_xin2_data()
+    df, operable_in_df, observable_in_df = build_xin2_data(
+        operability_csv=args.operability_csv,
+    )
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
         print(f"[调参模式] 截取最近 {args.sample_size} 条数据（共 {len(df)} 条）")
