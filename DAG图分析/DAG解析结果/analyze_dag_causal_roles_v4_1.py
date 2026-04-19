@@ -182,6 +182,8 @@ def load_variable_metadata(csv_path, line=None):
         else:
             operability = "unknown"
 
+    # 读取 Operability_Reason（operability CSV 特有）或 Group_Reason（annotated CSV 特有）
+    # 两种格式互斥：operability CSV 有 Operability_Reason，annotated CSV 有 Group_Reason
         meta_lookup[var] = {
             "stage":       row.get("Stage_ID", "?"),
             "group":       str(row.get("Group", "?")).strip(),
@@ -777,8 +779,9 @@ def main():
     if not has_operability:
         # 无 Operability 列：以图中所有非 Y 节点且在 meta_lookup 中的变量作为候选
         # 这是一种保守策略，确保不遗漏任何潜在的 Treatment
-        graph_vars_in_meta = {n for n in G.nodes if n in meta_lookup and n != y_node}
-        operable_set = graph_vars_in_meta
+        # 注意：此处完全替换 operable_set（原来为空集），而非追加
+        candidate_treatments = {n for n in G.nodes if n in meta_lookup and n != y_node}
+        operable_set = candidate_treatments
         print(f"      [备用模式] 以图中有效变量作为候选 Treatment: {len(operable_set)} 个")
 
     t_nodes_in_graph = sorted(
