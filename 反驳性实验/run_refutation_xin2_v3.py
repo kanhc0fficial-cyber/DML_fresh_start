@@ -126,6 +126,124 @@ CV_WARN         = 0.30   # CV 超过此值视为不稳定
 SIGN_RATE_MIN   = 0.70   # 符号一致率低于此值视为不可信
 
 
+# ══════════════════════════════════════════════════════════════════
+#  DAG 因果角色过滤（v3.1 新增）
+# ══════════════════════════════════════════════════════════════════
+
+# 默认路径：DAG 分析脚本输出的角色明细 CSV
+# 用户可通过 --dag-roles-csv 覆盖
+DEFAULT_DAG_ROLES_CSV = os.path.join(
+    r"C:\DML_fresh_start\DAG图分析\DAG解析结果",
+    # 替换为实际 GraphML 文件名对应的输出，例如：
+    # "xin2_dag_Roles_Table.csv"
+    ""  # 留空表示未指定，回退到纯相关性筛选
+)
+
+
+def load_dag_roles(csv_path: str) -> dict:
+    """
+    加载 DAG 角色明细表（analyze_dag_causal_roles_v4_1.py 的输出）。
+
+    CSV 必须包含列：Treatment_T, Role, Node_Name
+    Role 取值：0-Direct, 1-Confounder, 2-Mediator, 3-Collider, 4-Instrument
+
+    返回：
+      dag_roles[T_name] = {
+          "confounders": set(...),
+          "mediators":   set(...),
+          "colliders":   set(...),
+          "instruments": set(...),
+      }
+    如果文件不存在或为空，返回空 dict（回退到纯相关性筛选）。
+    """
+    if not csv_path or not os.path.exists(csv_path):
+        return {}
+
+    df = pd.read_csv(csv_path, encoding="utf-8-sig")
+    required_cols = {"Treatment_T", "Role", "Node_Name"}
+    if not required_cols.issubset(set(df.columns)):
+        print(f"[警告] DAG 角色表缺少必要列 {required_cols - set(df.columns)}，跳过 DAG 过滤")
+        return {}
+
+    role_map = {
+        "1-Confounder": "confounders",
+        "2-Mediator":   "mediators",
+        "3-Collider":   "colliders",
+        "4-Instrument": "instruments",
+    }
+
+    dag_roles = {}
+    for _, row in df.iterrows():
+        t_name = str(row["Treatment_T"]).strip()
+        role   = str(row["Role"]).strip()
+        node   = str(row["Node_Name"]).strip()
+        if role not in role_map:
+            continue  # 跳过 0-Direct 等
+        if t_name not in dag_roles:
+            dag_roles[t_name] = {
+                "confounders": set(),
+                "mediators":   set(),
+                "colliders":   set(),
+                "instruments": set(),
+            }
+        dag_roles[t_name][role_map[role]].add(node)
+
+    print(f"[DAG过滤] 已加载 {len(dag_roles)} 个操作变量的因果角色信息")
+    return dag_roles
+
+
+def build_safe_x_with_dag(op: str, df: pd.DataFrame, states: list,
+                           dag_roles: dict) -> list:
+    """
+    构建控制变量集 safe_x，整合 DAG 因果角色过滤。
+
+    策略：
+      1. 先用原始相关性/滞后筛选得到候选集 candidate_x
+      2. 如果 dag_roles 中有该操作变量的角色信息：
+         a) 从候选集中剔除：instruments, colliders, mediators
+         b) 只保留：confounders（以及 DAG 中未出现的变量，保守保留）
+      3. 如果 dag_roles 为空（无 DAG 信息），回退到原始 get_safe_x()
+
+    为什么 DAG 未覆盖的变量保守保留？
+      DAG 分析的图可能不包含所有 329 个变量（因果发现算法可能只保留
+      显著边），未出现在 DAG 中的变量无法判定角色，保留比剔除更安全。
+    """
+    # Step 1: 原始相关性筛选（与原版 get_safe_x 完全一致）
+    candidate_x = get_safe_x(op, df, states)
+
+    # Step 2: DAG 角色过滤
+    if not dag_roles or op not in dag_roles:
+        # 无 DAG 信息，回退
+        return candidate_x
+
+    roles = dag_roles[op]
+    # 必须剔除的角色集合
+    excluded_details = {"instrument": [], "collider": [], "mediator": []}
+
+    filtered_x = []
+    for var in candidate_x:
+        if var in roles["instruments"]:
+            excluded_details["instrument"].append(var)
+        elif var in roles["colliders"]:
+            excluded_details["collider"].append(var)
+        elif var in roles["mediators"]:
+            excluded_details["mediator"].append(var)
+        else:
+            # 是 confounder 或 DAG 中未出现（保守保留）
+            filtered_x.append(var)
+
+    n_excluded = len(candidate_x) - len(filtered_x)
+    if n_excluded > 0:
+        parts = []
+        for role_name, vars_list in excluded_details.items():
+            if vars_list:
+                parts.append(f"{role_name}={len(vars_list)}")
+        print(f"  [DAG过滤] {op}: 剔除 {n_excluded} 个变量 ({', '.join(parts)})，"
+              f"保留 {len(filtered_x)} 个控制变量")
+
+    return filtered_x
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  模型定义
 # ═══════════════════════════════════════════════════════════════════
@@ -574,12 +692,13 @@ def _run_parallel(tasks: list, worker_fn, ckpt_path: str,
 def _worker_placebo(task: dict) -> dict:
     op, perm_idx = task["op"], task["perm_idx"]
     df, states   = task["df"], task["states"]
+    dag_roles    = task["dag_roles"]          # ← 新增
     key          = task["_key"]
     if df[op].std() < 0.1:
         return {"_key": key, "_filtered": True, "_reason": "std<0.1"}
-    safe_x = get_safe_x(op, df, states)
+    safe_x = build_safe_x_with_dag(op, df, states, dag_roles)  # ← 替换
     if len(safe_x) < 2:
-        return {"_key": key, "_filtered": True, "_reason": "safe_x不足"}
+        return {"_key": key, "_filtered": True, "_reason": "safe_x不足(DAG过滤后)"}
     rng       = np.random.default_rng(seed=perm_idx * 42 + _op_seed(op))
     D_placebo = rng.permutation(df[op].values.copy())
     result    = train_one_op(op, df, safe_x, override_D=D_placebo)
@@ -700,19 +819,21 @@ def build_xin2_data():
 # ═══════════════════════════════════════════════════════════════════
 #  实验零：稳定性诊断（v3 新增 VAE 重建质量报告）
 # ═══════════════════════════════════════════════════════════════════
-def run_stability_diagnosis(df, ops, states, workers=4):
+def run_stability_diagnosis(df, ops, states, workers=4, dag_roles: dict = None):
     print("\n" + "=" * 70)
     print(f" 实验零：稳定性诊断（{N_BOOTSTRAP} 次 Bootstrap）")
     print(f" 架构：两阶段解耦 VAE-DML  |  推断用 μ（确定性，不采样）")
     print(f" 稳定标准：CV < {CV_WARN}  且  sign_rate ≥ {SIGN_RATE_MIN}")
     print("=" * 70)
+    if dag_roles is None:
+        dag_roles = {}
     states_list = list(states)
     rows = []
     n_stable = 0
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = get_safe_x(op, df, states_list)
+        safe_x = build_safe_x_with_dag(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
         result = train_one_op(op, df, safe_x)
@@ -751,10 +872,12 @@ def run_stability_diagnosis(df, ops, states, workers=4):
 # ═══════════════════════════════════════════════════════════════════
 #  实验一：安慰剂反驳
 # ═══════════════════════════════════════════════════════════════════
-def run_placebo(df, ops, states, n_permutations=5, workers=4):
+def run_placebo(df, ops, states, n_permutations=5, workers=4, dag_roles: dict = None):
     print("\n" + "=" * 70)
     print(" 实验一：安慰剂反驳实验（随机排列操作变量 D）")
     print("=" * 70)
+    if dag_roles is None:
+        dag_roles = {}
     ckpt_path   = os.path.join(PLACEBO_OUT_DIR, "checkpoint_placebo_v3.jsonl")
     states_list = list(states)
     tasks = []
@@ -763,7 +886,8 @@ def run_placebo(df, ops, states, n_permutations=5, workers=4):
             continue
         for perm_idx in range(n_permutations):
             tasks.append({"_key": f"{op}__perm{perm_idx}", "op": op,
-                          "perm_idx": perm_idx, "df": df, "states": states_list})
+                          "perm_idx": perm_idx, "df": df, "states": states_list,
+                          "dag_roles": dag_roles})
     _run_parallel(tasks, _worker_placebo, ckpt_path, workers, desc="安慰剂")
     recs   = [r for r in _read_all_records(ckpt_path) if not r.get("_filtered")]
     df_out = pd.DataFrame([{k: v for k, v in r.items() if not k.startswith("_")} for r in recs])
@@ -780,12 +904,14 @@ def run_placebo(df, ops, states, n_permutations=5, workers=4):
 # ═══════════════════════════════════════════════════════════════════
 #  实验二：随机混杂变量反驳
 # ═══════════════════════════════════════════════════════════════════
-def run_random_confounder(df, ops, states, n_confounders=5, n_repeats=1, workers=4):
+def run_random_confounder(df, ops, states, n_confounders=5, n_repeats=1, workers=4, dag_roles: dict = None):
     print("\n" + "=" * 70)
     print(f" 实验二：随机混杂变量反驳（注入 {n_confounders} 个随机噪声列）")
     print(f" v3 改进：Stage 1 仅重建 X，Stage 2 头不受噪声重建影响")
     print(f" 判断标准：t_diff = |Δθ| / √(SE_orig²+SE_noisy²) < 2.0")
     print("=" * 70)
+    if dag_roles is None:
+        dag_roles = {}
     ckpt_path   = os.path.join(RANDOM_CONFOUNDER_OUT_DIR, "checkpoint_rc_v3.jsonl")
     states_list = list(states)
     print("[预计算原始 θ ...]")
@@ -793,7 +919,7 @@ def run_random_confounder(df, ops, states, n_confounders=5, n_repeats=1, workers
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = get_safe_x(op, df, states_list)
+        safe_x = build_safe_x_with_dag(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
         result = train_one_op(op, df, safe_x)
@@ -827,10 +953,12 @@ def run_random_confounder(df, ops, states, n_confounders=5, n_repeats=1, workers
 # ═══════════════════════════════════════════════════════════════════
 #  实验三：数据子集反驳
 # ═══════════════════════════════════════════════════════════════════
-def run_data_subset(df, ops, states, n_subsets=8, subset_frac=0.8, workers=4):
+def run_data_subset(df, ops, states, n_subsets=8, subset_frac=0.8, workers=4, dag_roles: dict = None):
     print("\n" + "=" * 70)
     print(f" 实验三：数据子集反驳（{n_subsets} 个子集，每个取 {subset_frac:.0%} 数据）")
     print("=" * 70)
+    if dag_roles is None:
+        dag_roles = {}
     ckpt_path   = os.path.join(DATA_SUBSET_OUT_DIR, "checkpoint_ds_v3.jsonl")
     states_list = list(states)
     T = len(df); subset_len = int(T * subset_frac)
@@ -839,7 +967,7 @@ def run_data_subset(df, ops, states, n_subsets=8, subset_frac=0.8, workers=4):
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = get_safe_x(op, df, states_list)
+        safe_x = build_safe_x_with_dag(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
         for sub_idx in range(n_subsets):
@@ -909,6 +1037,9 @@ def parse_args():
                    help=f"Bootstrap 次数（默认 {N_BOOTSTRAP}；调参时用 3 加速）")
     p.add_argument("--sample_size",    type=int, default=0,
                    help="截取最近 N 条数据调参（0=全量）")
+    p.add_argument("--dag-roles-csv", type=str, default="",
+                   help="DAG 角色明细 CSV 路径（analyze_dag_causal_roles_v4_1.py 的输出）。"
+                        "若不指定，回退到纯相关性筛选（与 v3 行为一致）。")
     return p.parse_args()
 
 
@@ -935,20 +1066,30 @@ def main():
     states = sorted(observable_in_df & set(df.columns))
     print(f"操作变量 {len(ops)} 个，状态变量 {len(states)} 个\n")
 
+    # ── 加载 DAG 因果角色（v3.1 新增）────────────────────────────
+    dag_csv = args.dag_roles_csv or DEFAULT_DAG_ROLES_CSV
+    dag_roles = load_dag_roles(dag_csv)
+    if not dag_roles:
+        print("[注意] 未加载 DAG 角色信息，将使用纯相关性筛选（与 v3 行为一致）")
+        print("       建议先运行 DAG 分析脚本生成角色表，再通过 --dag-roles-csv 传入")
+
     mode = args.mode
     if mode in ("stability", "all"):
-        run_stability_diagnosis(df, set(ops), set(states), workers=args.workers)
+        run_stability_diagnosis(df, set(ops), set(states),
+                                workers=args.workers, dag_roles=dag_roles)
     if mode in ("placebo", "all"):
         run_placebo(df, set(ops), set(states),
-                    n_permutations=args.n_permutations, workers=args.workers)
+                    n_permutations=args.n_permutations,
+                    workers=args.workers, dag_roles=dag_roles)
     if mode in ("random_confounder", "all"):
         run_random_confounder(df, set(ops), set(states),
                               n_confounders=args.n_confounders,
-                              n_repeats=args.n_repeats, workers=args.workers)
+                              n_repeats=args.n_repeats,
+                              workers=args.workers, dag_roles=dag_roles)
     if mode in ("data_subset", "all"):
         run_data_subset(df, set(ops), set(states),
                         n_subsets=args.n_subsets, subset_frac=args.subset_frac,
-                        workers=args.workers)
+                        workers=args.workers, dag_roles=dag_roles)
 
     print("\n" + "=" * 70)
     print(" 全部实验完成，结果保存至：")
