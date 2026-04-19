@@ -186,17 +186,24 @@ class SyntheticDAGGenerator:
             layer_indices: 每层的节点索引列表
         """
         if nodes_per_layer is None:
-            # 默认分配：中间层节点多，首尾层节点少
-            if n_layers == 5:
-                nodes_per_layer = [3, 5, 6, 4, 2]
-            else:
-                # 自动分配
-                base = self.n_nodes // n_layers
-                nodes_per_layer = [base] * n_layers
-                remainder = self.n_nodes - base * n_layers
-                # 将余数分配到中间层
-                for i in range(remainder):
-                    nodes_per_layer[n_layers // 2 + i % 2] += 1
+            if self.n_nodes < n_layers:
+                raise ValueError(
+                    f"n_nodes ({self.n_nodes}) 必须 >= n_layers ({n_layers})"
+                )
+            # 自动分配：中间层节点多，首尾层节点少
+            base = self.n_nodes // n_layers
+            nodes_per_layer = [base] * n_layers
+            remainder = self.n_nodes - base * n_layers
+            # 将余数从中间向两侧分配，防止索引越界
+            mid = n_layers // 2
+            for i in range(remainder):
+                # 交替在 mid, mid+1, mid-1, mid+2, ... 位置分配
+                if i % 2 == 0:
+                    idx = mid + i // 2
+                else:
+                    idx = mid - (i // 2 + 1)
+                idx = max(0, min(idx, n_layers - 1))
+                nodes_per_layer[idx] += 1
         
         total_nodes = sum(nodes_per_layer)
         if total_nodes != self.n_nodes:
@@ -389,6 +396,7 @@ class SyntheticDAGGenerator:
         
         # 拓扑排序，确保按因果顺序生成数据
         G = nx.DiGraph()
+        G.add_nodes_from(range(self.n_nodes))  # 确保所有节点都被包含
         for i in range(self.n_nodes):
             for j in range(self.n_nodes):
                 if adj[i, j] > 0:
@@ -423,13 +431,22 @@ class SyntheticDAGGenerator:
                         X, t, node, parents, edge_funcs
                     )
                 
-                # 生成噪声
+                # 生成噪声（传入当前信号强度，用于异方差噪声）
+                current_signal = ar_term + causal_term
                 noise = self._generate_noise(
-                    t, node, X, noise_scale, noise_type
+                    t, node, X, noise_scale, noise_type,
+                    current_signal=current_signal
                 )
                 
-                # 组合
-                X[t, node] = ar_term + causal_term + noise
+                # 组合并裁剪，防止数值爆炸
+                X[t, node] = np.clip(
+                    ar_term + causal_term + noise, -1e4, 1e4
+                )
+        
+        # 最终安全检查：替换可能残留的 NaN/Inf
+        if np.any(~np.isfinite(X)):
+            warnings.warn("生成的数据中存在 NaN/Inf，已替换为 0")
+            X = np.nan_to_num(X, nan=0.0, posinf=1e4, neginf=-1e4)
         
         return X
     
@@ -441,7 +458,7 @@ class SyntheticDAGGenerator:
         parents: List[int],
         edge_funcs: Dict[Tuple[int, int], Dict]
     ) -> float:
-        """计算父节点对当前节点的因果贡献"""
+        """计算父节点对当前节点的因果贡献（按父节点数归一化防止数值爆炸）"""
         contribution = 0.0
         
         for parent in parents:
@@ -466,6 +483,10 @@ class SyntheticDAGGenerator:
             elif func_type == 'poly':
                 contribution += params['a'] * parent_data**2 + params['b'] * parent_data
         
+        # 按父节点数归一化，防止多父节点累加导致数值逐层爆炸
+        if len(parents) > 1:
+            contribution /= len(parents)
+        
         return contribution
     
     def _generate_noise(
@@ -474,7 +495,8 @@ class SyntheticDAGGenerator:
         node: int,
         X: np.ndarray,
         noise_scale: float,
-        noise_type: str
+        noise_type: str,
+        current_signal: float = 0.0
     ) -> float:
         """
         生成不同类型的噪声
@@ -485,18 +507,16 @@ class SyntheticDAGGenerator:
             X: 数据矩阵
             noise_scale: 噪声尺度
             noise_type: 噪声类型
+            current_signal: 当前节点的信号值（用于异方差噪声）
         """
         if noise_type == 'gaussian':
             # 标准高斯白噪声
             return self.rng.randn() * noise_scale
         
         elif noise_type == 'heteroscedastic':
-            # 异方差噪声：噪声大小依赖于当前值
+            # 异方差噪声：噪声大小依赖于当前信号强度
             base_noise = self.rng.randn()
-            if t > 0:
-                scale = noise_scale * (1.0 + 0.5 * np.abs(X[t, node]))
-            else:
-                scale = noise_scale
+            scale = noise_scale * (1.0 + 0.5 * np.abs(current_signal))
             return base_noise * scale
         
         elif noise_type == 'heavy_tail':
