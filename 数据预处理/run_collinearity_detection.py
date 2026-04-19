@@ -27,10 +27,16 @@ log = logging.getLogger(__name__)
 MIN_SAMPLES = 50
 
 # ─── 路径配置 ───
-BASE_DIR = r"C:\backup\doubleml"
-STAGE_DIR = r"C:\backup\gemini_clean\output_stages_classified_split_by_stage"
-X_PARQUET = os.path.join(BASE_DIR, "X_features_new.parquet")
-ABC_CSV = r"C:\backup\doubleml\操作变量和混杂变量\output_ABC_分类合集_带变化标签.csv"
+# 项目根目录（本脚本位于 <root>/数据预处理/ 下，上移一层即为根目录）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 数据目录（data_processing/README.md 规定的标准数据存放位置）
+DATA_DIR  = os.path.join(_PROJECT_ROOT, "data")
+# 工艺阶段分类 CSV 目录（文件名须含 stage_N，且含 NAME 列）
+STAGE_DIR = os.path.join(DATA_DIR, "操作变量和混杂变量")
+# preprocess_X.py 的输出：X 特征宽表（列=传感器 TAG 名，全大写）
+X_PARQUET = os.path.join(DATA_DIR, "X_features_final.parquet")
+# ABC 分类元数据（Active/Inactive 标签及变化统计）
+ABC_CSV   = os.path.join(DATA_DIR, "操作变量和混杂变量", "output_ABC_分类合集_带变化标签.csv")
 
 # 修改为当前项目路径
 OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "结果")
@@ -40,6 +46,9 @@ CLEAN_VARS_PATH = os.path.join(OUT_DIR, "non_collinear_representative_vars.csv")
 
 def load_stage_dict():
     var_to_stage = {}
+    if not os.path.isdir(STAGE_DIR):
+        log.warning(f"  工艺阶段分类目录不存在，跳过阶段过滤：{STAGE_DIR}")
+        return var_to_stage
     csv_files = glob.glob(os.path.join(STAGE_DIR, "*.csv"))
     for f in csv_files:
         basename = os.path.basename(f).lower()
@@ -49,21 +58,26 @@ def load_stage_dict():
             stage_num = int(match.group(1))
             try:
                 df = pd.read_csv(f, usecols=["NAME"])
-                for name in df["NAME"].dropna().str.strip():
+                # 统一转大写，与 X_features_final.parquet 的 TAG 命名规范保持一致
+                for name in df["NAME"].dropna().str.strip().str.upper():
                     var_to_stage[name] = stage_num
-            except: pass
+            except Exception: pass
     return var_to_stage
 
 def load_abc_metadata():
     """读取 ABC 分类及变化统计信息，仅保留 change_status 为 Active 的变量"""
+    if not os.path.isfile(ABC_CSV):
+        log.warning(f"  ABC 分类文件不存在，将对所有列执行无元数据模式：{ABC_CSV}")
+        return {}
     try:
         df = pd.read_csv(ABC_CSV)
         # 建立 变量 -> {Group, change_count} 的映射，且仅保留 Active 变量
+        # 变量名统一转大写，与 X_features_final.parquet 的 TAG 命名规范保持一致
         meta = {}
         for _, row in df.iterrows():
             if str(row.get("change_status", "")).strip() != "Active":
                 continue
-            name = str(row.get("NAME", "")).strip()
+            name = str(row.get("NAME", "")).strip().upper()
             if not name: continue
             meta[name] = {
                 "Group": str(row.get("Group", "C")).strip(),
@@ -89,20 +103,36 @@ def main():
     
     # 预检数据列是否存在
     log.info(f"  Active 候选总数: {len(all_potential_vars)} 维")
+
+    if not os.path.isfile(X_PARQUET):
+        raise FileNotFoundError(
+            f"特征文件不存在：{X_PARQUET}\n"
+            "请先运行 data_processing/preprocess_X.py 生成 X_features_final.parquet。"
+        )
     
     # 获取 Parquet 中的所有实际列名 (使用 pyarrow 引擎快速获取 schema)
+    # X_features_final.parquet 的列名均为大写 TAG 名；schema.names 还包含索引列 "time"，需剔除
     parquet_file = pq.ParquetFile(X_PARQUET)
-    available_cols = set(parquet_file.schema.names)
+    available_cols = set(parquet_file.schema.names) - {"time", "__null_dask_index__", "__index_level_0__"}
     
-    valid_vars = [v for v in all_potential_vars if v in available_cols and v in var_to_stage]
+    # all_potential_vars 已全大写（load_abc_metadata 已转换）；var_to_stage 同样已全大写
+    if var_to_stage:
+        valid_vars = [v for v in all_potential_vars if v in available_cols and v in var_to_stage]
+    else:
+        # 若无阶段分类文件，仅按 ABC 元数据与 Parquet 列名交集过滤
+        valid_vars = [v for v in all_potential_vars if v in available_cols]
     log.info(f"  对齐工艺库与数据文件后，最终参与聚类维度: D={len(valid_vars)}")
     
     log.info(f"[2/5] 载入全量时序数据矩阵 (D={len(valid_vars)})...")
     X = pd.read_parquet(X_PARQUET, columns=valid_vars)
     
-    # 时序特征下采样到 10分钟/点 以滤除传感器毫秒级的高频瞬时噪声
+    # X_features_final.parquet 索引已为 1min 频率的 DatetimeIndex (time)；
+    # 重采样到 10min 以进一步平滑噪声，同时兼容时区感知与时区无关两种索引格式
     log.info("[3/5] 数据抗噪平滑化：应用 10min 重采样并前向填充...")
-    X.index = pd.to_datetime(X.index).tz_localize(None)
+    if not isinstance(X.index, pd.DatetimeIndex):
+        X.index = pd.to_datetime(X.index)
+    if X.index.tz is not None:
+        X.index = X.index.tz_convert(None)
     X_re = X.resample('10min').mean().ffill().bfill()
 
     if len(X_re) < MIN_SAMPLES:
