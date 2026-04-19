@@ -44,6 +44,7 @@ preprocess_Y.py — Y（精矿品位）变量处理脚本
   pip install pandas openpyxl pyarrow
 """
 
+import datetime
 import re
 import time
 import warnings
@@ -105,6 +106,32 @@ _PATTERN_GRADE = re.compile(
 _TIME_KEYWORDS = {"time", "时间", "日期", "date", "datetime", "timestamp"}
 
 
+# ─── Excel 引擎 & 文件/Sheet 日期提取 ─────────────────────────────────────────
+def _get_excel_engine(path: Path) -> str:
+    """根据文件扩展名选择正确的 Excel 引擎（.xls → xlrd，.xlsx → openpyxl）。"""
+    return "xlrd" if path.suffix.lower() == ".xls" else "openpyxl"
+
+
+def _extract_ym_from_filename(path: Path) -> Optional[tuple[int, int]]:
+    """从文件名中提取 (年, 月)，例如 '2026.01_...' → (2026, 1)。"""
+    m = re.search(r"(\d{4})\.(\d{1,2})", path.stem)
+    if m:
+        year, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12:
+            return year, month
+    return None
+
+
+def _extract_day_from_sheet(sheet_name: str) -> Optional[int]:
+    """从 sheet 名称中提取日序号，例如 '(1)'、'（4）' → 1、4。"""
+    m = re.search(r"[（(](\d{1,2})[）)]", sheet_name.strip())
+    if m:
+        d = int(m.group(1))
+        if 1 <= d <= 31:
+            return d
+    return None
+
+
 # ─── 日志 ──────────────────────────────────────────────────────────────────────
 def _log(msg: str):
     ts = time.strftime("%H:%M:%S")
@@ -123,10 +150,65 @@ def _is_time_col(col_name: str) -> bool:
     return any(kw in name for kw in _TIME_KEYWORDS)
 
 
-def _parse_timestamps(series: pd.Series) -> pd.Series:
-    """将时间列解析为 pd.Timestamp，支持 datetime/字符串/Excel浮点数。"""
+def _parse_timestamps(
+    series: pd.Series,
+    reference_date: Optional[datetime.date] = None,
+) -> pd.Series:
+    """将时间列解析为 pd.Timestamp，支持 datetime/字符串/Excel浮点数/仅时刻值。
+
+    参数：
+      series:         原始时间列
+      reference_date: 当时间列只含时刻（无日期）时，用此日期补全时间戳。
+                      通常从文件名（年月）+ sheet 名称（日）推导而来。
+    """
+    # ── 处理 datetime.time 对象（xlrd 读取 XLS 时刻格式单元格时返回此类型）──────
+    # datetime.time 不含日期，必须结合 reference_date 才能得到完整时间戳。
+    if series.apply(lambda x: isinstance(x, datetime.time)).any():
+        if reference_date is not None:
+            return pd.Series(
+                [
+                    pd.Timestamp.combine(reference_date, x)
+                    if isinstance(x, datetime.time)
+                    else pd.NaT
+                    for x in series
+                ],
+                index=series.index,
+            )
+        return pd.Series(
+            [pd.NaT] * len(series),
+            index=series.index,
+            dtype="datetime64[ns]",
+        )
+
+    # ── 常规解析 ────────────────────────────────────────────────────────────────
     parsed = pd.to_datetime(series, errors="coerce")
-    # 尝试 Excel 序列日期格式
+
+    # ── 修正 Excel 时间分数（0 ≤ x < 1）误被解析为 1970 的问题 ─────────────────
+    # openpyxl 读取时刻格式单元格时会返回 0~1 之间的浮点数（一天的分数）。
+    # pd.to_datetime 把这类值当作纳秒级 epoch 偏移，结果落在 1970-01-01，
+    # 且不会产生 NaT，导致 excel_mask 不会将其纳入回退处理。
+    # 修正方式：若有 reference_date，将这些分数换算为真实时刻。
+    if reference_date is not None:
+        frac_mask = series.apply(
+            lambda x: isinstance(x, (int, float))
+            and not pd.isna(x)
+            and 0.0 <= float(x) < 1.0
+        )
+        if frac_mask.any():
+            def _frac_to_ts(frac: float) -> pd.Timestamp:
+                total_sec = round(frac * 86400)
+                h, rem = divmod(int(total_sec), 3600)
+                m, s = divmod(rem, 60)
+                try:
+                    t = datetime.time(h % 24, m, s)
+                    return pd.Timestamp.combine(reference_date, t)
+                except (ValueError, TypeError):
+                    return pd.NaT
+
+            for idx in series[frac_mask].index:
+                parsed.at[idx] = _frac_to_ts(float(series[idx]))
+
+    # ── 对仍为 NaT 的值，尝试 Excel 序列日期格式（整数/大浮点数）────────────────
     excel_mask = parsed.isna() & series.notna()
     if excel_mask.any():
         try:
@@ -176,6 +258,7 @@ def _classify_sheet(sheet_name: str) -> Optional[str]:
 def _extract_y_from_df(
     df_raw: pd.DataFrame,
     sheet_hint: Optional[str] = None,
+    reference_date: Optional[datetime.date] = None,
 ) -> dict[str, pd.Series]:
     """
     从一个 DataFrame 中提取新1#/新2#精矿品位列。
@@ -200,14 +283,14 @@ def _extract_y_from_df(
     # 回退：用第一列作为时间列（如果它像时间）
     if time_col is None:
         first_col = df_raw.columns[0]
-        trial = _parse_timestamps(df_raw[first_col])
+        trial = _parse_timestamps(df_raw[first_col], reference_date=reference_date)
         if trial.notna().sum() > len(df_raw) * 0.5:
             time_col = first_col
 
     if time_col is None:
         return results  # 没有时间列，跳过
 
-    times = _parse_timestamps(df_raw[time_col])
+    times = _parse_timestamps(df_raw[time_col], reference_date=reference_date)
     valid_time_mask = times.notna()
     if valid_time_mask.sum() == 0:
         return results
@@ -272,6 +355,94 @@ def _looks_like_grade_column(series: pd.Series) -> bool:
     return (30.0 <= mean_val <= 85.0) and (std_val > 0.01)
 
 
+# ─── 多表块结构扫描（针对复杂 Excel 格式的回退策略）─────────────────────────
+def _extract_blocks_from_raw_sheet(
+    df_raw: pd.DataFrame,
+    reference_date: Optional[datetime.date] = None,
+) -> dict[str, pd.Series]:
+    """
+    从以 header=None 读取的原始 Sheet 中扫描多表块，提取 新1#/新2# 品位数据。
+
+    适用场景：sheet 中内嵌多个小表，每个表有自己的表头行（含"时间"关键词），
+    品位列名（含"新1#"/"新2#"关键词）可能在表头行的下一行。
+
+    返回：{'xin1': pd.Series, 'xin2': pd.Series}（可能只有其中一个）
+    """
+    results: dict[str, pd.Series] = {}
+    n_rows, n_cols = df_raw.shape
+
+    for r_idx in range(n_rows):
+        col0_val = df_raw.iloc[r_idx, 0]
+        if not isinstance(col0_val, str) or not _is_time_col(col0_val.strip()):
+            continue
+
+        # 在表头行及其后 3 行内搜索 新1#/新2# 列位置
+        xin1_col: Optional[int] = None
+        xin2_col: Optional[int] = None
+        for search_r in range(r_idx, min(r_idx + 4, n_rows)):
+            for c_idx in range(n_cols):
+                val_str = str(df_raw.iloc[search_r, c_idx]).strip()
+                if xin1_col is None and _PATTERN_XIN1.search(val_str) and not _PATTERN_XIN2.search(val_str):
+                    xin1_col = c_idx
+                if xin2_col is None and _PATTERN_XIN2.search(val_str) and not _PATTERN_XIN1.search(val_str):
+                    xin2_col = c_idx
+            if xin1_col is not None or xin2_col is not None:
+                break
+
+        if xin1_col is None and xin2_col is None:
+            continue
+
+        # 收集数据行（时间列为 datetime.time 或 0≤float<1 的行）
+        data_rows: list[int] = []
+        for d_idx in range(r_idx + 1, n_rows):
+            cell = df_raw.iloc[d_idx, 0]
+            if isinstance(cell, str):
+                stripped = cell.strip()
+                if stripped in ("平均", "月平均") or _is_time_col(stripped):
+                    break
+            if isinstance(cell, datetime.time):
+                data_rows.append(d_idx)
+            elif isinstance(cell, (int, float)) and not pd.isna(cell) and 0.0 <= float(cell) < 1.0:
+                data_rows.append(d_idx)
+
+        if not data_rows:
+            continue
+
+        # 解析时间列
+        time_vals = pd.Series(
+            [df_raw.iloc[r, 0] for r in data_rows],
+            dtype=object,
+        )
+        times = _parse_timestamps(time_vals, reference_date=reference_date)
+
+        # 提取品位值
+        for line, col_idx in [("xin1", xin1_col), ("xin2", xin2_col)]:
+            if col_idx is None:
+                continue
+            vals = pd.to_numeric(
+                pd.Series([df_raw.iloc[r, col_idx] for r in data_rows]),
+                errors="coerce",
+            )
+            s = pd.Series(
+                vals.values,
+                index=pd.DatetimeIndex(times.values),
+                name=f"y_fx_{line}",
+            )
+            s = s[times.notna().values].dropna()
+            if s.empty:
+                continue
+            s.index = s.index.floor("min")
+            s = s[~s.index.duplicated(keep="first")].sort_index()
+            s = _apply_physical_clip(s)
+            if line in results:
+                combined = pd.concat([results[line], s])
+                results[line] = combined.groupby(combined.index).mean()
+            else:
+                results[line] = s
+
+    return results
+
+
 # ─── 物理范围裁剪 ─────────────────────────────────────────────────────────────
 def _apply_physical_clip(series: pd.Series) -> pd.Series:
     """
@@ -295,15 +466,29 @@ def parse_y_from_excel(xlsx_path: Path) -> dict[str, pd.Series]:
     _log(f"  [解析] {xlsx_path.name}")
     results: dict[str, list] = {"xin1": [], "xin2": []}
 
+    engine = _get_excel_engine(xlsx_path)
     try:
-        xl = pd.ExcelFile(xlsx_path, engine="openpyxl")
+        xl = pd.ExcelFile(xlsx_path, engine=engine)
     except Exception as e:
         _log(f"  [跳过] 无法打开 {xlsx_path.name}: {e}")
         return {}
 
+    # 从文件名提取年月（用于构建 reference_date）
+    ym = _extract_ym_from_filename(xlsx_path)
+
     for sheet_name in xl.sheet_names:
         # 判断 sheet 名对应的产线提示
         sheet_line_hint = _classify_sheet(sheet_name)
+
+        # 从 sheet 名提取日序号，与年月组合得到参考日期
+        reference_date: Optional[datetime.date] = None
+        if ym is not None:
+            day = _extract_day_from_sheet(sheet_name)
+            if day is not None:
+                try:
+                    reference_date = datetime.date(ym[0], ym[1], day)
+                except ValueError:
+                    pass
 
         try:
             df_raw = xl.parse(sheet_name, header=0)
@@ -314,7 +499,23 @@ def parse_y_from_excel(xlsx_path: Path) -> dict[str, pd.Series]:
         if df_raw.empty:
             continue
 
-        extracted = _extract_y_from_df(df_raw, sheet_hint=sheet_line_hint)
+        extracted = _extract_y_from_df(
+            df_raw,
+            sheet_hint=sheet_line_hint,
+            reference_date=reference_date,
+        )
+
+        # 若标准解析未能找到任何数据，启用多表块扫描回退策略
+        # （适用于列名内嵌在数据行中的复杂多表结构 Excel）
+        if not extracted:
+            try:
+                df_raw_no_header = xl.parse(sheet_name, header=None)
+                extracted = _extract_blocks_from_raw_sheet(
+                    df_raw_no_header,
+                    reference_date=reference_date,
+                )
+            except Exception:
+                pass
 
         for line, s in extracted.items():
             if not s.empty:

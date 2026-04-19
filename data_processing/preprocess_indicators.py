@@ -39,6 +39,8 @@ preprocess_indicators.py — 化验指标预处理脚本
   pip install pandas openpyxl pyarrow
 """
 
+import datetime
+import re
 import time
 import warnings
 from pathlib import Path
@@ -85,6 +87,32 @@ PHYSICAL_BOUNDS: dict[str, tuple[float, float]] = {
 }
 
 
+# ─── Excel 引擎 & 文件/Sheet 日期提取 ─────────────────────────────────────────
+def _get_excel_engine(path: Path) -> str:
+    """根据文件扩展名选择正确的 Excel 引擎（.xls → xlrd，.xlsx → openpyxl）。"""
+    return "xlrd" if path.suffix.lower() == ".xls" else "openpyxl"
+
+
+def _extract_ym_from_filename(path: Path) -> Optional[tuple[int, int]]:
+    """从文件名中提取 (年, 月)，例如 '2025.10_...' → (2025, 10)。"""
+    m = re.search(r"(\d{4})\.(\d{1,2})", path.stem)
+    if m:
+        year, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12:
+            return year, month
+    return None
+
+
+def _extract_day_from_sheet(sheet_name: str) -> Optional[int]:
+    """从 sheet 名称中提取日序号，例如 '(1)'、'（4）' → 1、4。"""
+    m = re.search(r"[（(](\d{1,2})[）)]", sheet_name.strip())
+    if m:
+        d = int(m.group(1))
+        if 1 <= d <= 31:
+            return d
+    return None
+
+
 # ─── 日志 ──────────────────────────────────────────────────────────────────────
 def _log(msg: str):
     ts = time.strftime("%H:%M:%S")
@@ -107,14 +135,64 @@ def _is_time_col(col_name: str) -> bool:
     return any(kw in name for kw in _TIME_KEYWORDS)
 
 
-def _parse_timestamps(series: pd.Series) -> pd.Series:
+def _parse_timestamps(
+    series: pd.Series,
+    reference_date: Optional[datetime.date] = None,
+) -> pd.Series:
     """
     将时间列解析为 pd.Timestamp。
-    支持：datetime 对象、Excel 浮点数、字符串格式。
+    支持：datetime 对象、Excel 浮点数、字符串格式、仅含时刻的 datetime.time。
+
+    参数：
+      series:         原始时间列
+      reference_date: 当时间列只含时刻（无日期）时，用此日期补全时间戳。
     """
+    # ── 处理 datetime.time 对象（xlrd 读取 XLS 时刻格式单元格时返回此类型）──────
+    if series.apply(lambda x: isinstance(x, datetime.time)).any():
+        if reference_date is not None:
+            return pd.Series(
+                [
+                    pd.Timestamp.combine(reference_date, x)
+                    if isinstance(x, datetime.time)
+                    else pd.NaT
+                    for x in series
+                ],
+                index=series.index,
+            )
+        return pd.Series(
+            [pd.NaT] * len(series),
+            index=series.index,
+            dtype="datetime64[ns]",
+        )
+
+    # ── 常规解析 ────────────────────────────────────────────────────────────────
     # 先尝试直接 pd.to_datetime
     parsed = pd.to_datetime(series, errors="coerce")
-    # 对仍为 NaT 的，尝试把 Excel 序列数（浮点）转换
+
+    # ── 修正 Excel 时间分数（0 ≤ x < 1）误被解析为 1970 的问题 ─────────────────
+    # openpyxl 读取时刻格式单元格时会返回 0~1 之间的浮点数（一天的分数）。
+    # pd.to_datetime 把这类值当作纳秒级 epoch 偏移，结果落在 1970-01-01。
+    if reference_date is not None:
+        frac_mask = series.apply(
+            lambda x: isinstance(x, (int, float))
+            and not pd.isna(x)
+            and 0.0 <= float(x) < 1.0
+        )
+        if frac_mask.any():
+            def _frac_to_ts(frac: float) -> pd.Timestamp:
+                total_sec = round(frac * 86400)
+                h, rem = divmod(int(total_sec), 3600)
+                m, s = divmod(rem, 60)
+                try:
+                    t = datetime.time(h % 24, m, s)
+                    return pd.Timestamp.combine(reference_date, t)
+                except (ValueError, TypeError):
+                    return pd.NaT
+
+            for idx in series[frac_mask].index:
+                parsed.at[idx] = _frac_to_ts(float(series[idx]))
+
+    # ── 对仍为 NaT 的，尝试把 Excel 序列数（浮点）转换 ──────────────────────────
     excel_mask = parsed.isna() & series.notna()
     if excel_mask.any():
         try:
@@ -131,7 +209,10 @@ def _parse_timestamps(series: pd.Series) -> pd.Series:
 
 
 # ─── 单张 Sheet 解析 ────────────────────────────────────────────────────────────
-def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
+def _parse_sheet_as_dataframe(
+    df_raw: pd.DataFrame,
+    reference_date: Optional[datetime.date] = None,
+) -> pd.DataFrame:
     """
     将一张 sheet 的原始 DataFrame 转换为以时间为 index 的指标 DataFrame。
 
@@ -151,7 +232,7 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     if time_col is not None:
         # 单表格式：时间列 + 指标列
-        times = _parse_timestamps(df_raw[time_col])
+        times = _parse_timestamps(df_raw[time_col], reference_date=reference_date)
         value_cols = [c for c in df_raw.columns if c != time_col]
         df_values = df_raw[value_cols].copy()
         df_values.index = times
@@ -164,7 +245,7 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
     # ── 策略 B：无时间列名，尝试用第一列作为时间列 ───────────────────────────
     # 判断第一列是否是时间
     first_col = df_raw.columns[0]
-    parsed_first = _parse_timestamps(df_raw[first_col])
+    parsed_first = _parse_timestamps(df_raw[first_col], reference_date=reference_date)
     if parsed_first.notna().sum() > len(df_raw) * 0.5:
         # 第一列确实是时间
         df_values = df_raw.iloc[:, 1:].copy()
@@ -186,14 +267,14 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
         for sep_idx in nan_indices:
             block_cols = cols[start_idx:sep_idx]
             if block_cols:
-                block_df = _parse_sheet_as_dataframe(df_raw[block_cols])
+                block_df = _parse_sheet_as_dataframe(df_raw[block_cols], reference_date=reference_date)
                 if not block_df.empty:
                     blocks.append(block_df)
             start_idx = sep_idx + 1
         # 最后一个块
         block_cols = cols[start_idx:]
         if block_cols:
-            block_df = _parse_sheet_as_dataframe(df_raw[block_cols])
+            block_df = _parse_sheet_as_dataframe(df_raw[block_cols], reference_date=reference_date)
             if not block_df.empty:
                 blocks.append(block_df)
         if blocks:
@@ -201,6 +282,116 @@ def _parse_sheet_as_dataframe(df_raw: pd.DataFrame) -> pd.DataFrame:
 
     # 无法解析
     return pd.DataFrame()
+
+
+# ─── 多表块结构扫描（针对复杂 Excel 格式的回退策略）─────────────────────────
+def _extract_blocks_from_raw_sheet(
+    df_raw: pd.DataFrame,
+    reference_date: Optional[datetime.date] = None,
+) -> pd.DataFrame:
+    """
+    从以 header=None 读取的原始 Sheet 中扫描多表块，提取所有数值指标。
+
+    适用场景：sheet 中内嵌多个小表，每个表有自己的表头行（含"时间"关键词），
+    列名可能分布在 1-2 行表头中（上级分类 + 下级细分），数据行紧随其后。
+
+    返回：以 DatetimeIndex 为 index 的宽表 DataFrame（可能为空）。
+    """
+    frames: list[pd.DataFrame] = []
+    n_rows, n_cols = df_raw.shape
+
+    r_idx = 0
+    while r_idx < n_rows:
+        col0_val = df_raw.iloc[r_idx, 0]
+        if not isinstance(col0_val, str) or not _is_time_col(col0_val.strip()):
+            r_idx += 1
+            continue
+
+        # 从当前"时间"行开始，收集 1-2 行表头构建列名
+        header_row_1 = [str(df_raw.iloc[r_idx, c]).strip() for c in range(n_cols)]
+        # 检查下一行是否也是表头行（下一行 col 0 是 NaN 或空）
+        header_row_2: list[str] = []
+        next_r = r_idx + 1
+        if next_r < n_rows:
+            nr0 = df_raw.iloc[next_r, 0]
+            if pd.isna(nr0) or (isinstance(nr0, str) and not nr0.strip()):
+                header_row_2 = [str(df_raw.iloc[next_r, c]).strip() for c in range(n_cols)]
+                next_r += 1
+
+        # 合并双行表头：用 "_" 拼接非空的上下两级，去掉 "nan" 占位
+        col_names: list[str] = []
+        for c in range(n_cols):
+            top = header_row_1[c] if header_row_1[c] not in ("", "nan") else ""
+            bot = header_row_2[c] if header_row_2 and header_row_2[c] not in ("", "nan") else ""
+            if top and bot:
+                col_names.append(f"{top}_{bot}")
+            elif top:
+                col_names.append(top)
+            elif bot:
+                col_names.append(bot)
+            else:
+                col_names.append("")
+        # 第 0 列是时间列
+        time_col_name = col_names[0] if col_names else "时间"
+
+        # 收集数据行
+        data_rows: list[int] = []
+        d_idx = next_r
+        while d_idx < n_rows:
+            cell = df_raw.iloc[d_idx, 0]
+            if isinstance(cell, str):
+                stripped = cell.strip()
+                if stripped in ("平均", "月平均") or _is_time_col(stripped):
+                    break
+            if isinstance(cell, datetime.time):
+                data_rows.append(d_idx)
+            elif isinstance(cell, (int, float)) and not pd.isna(cell) and 0.0 <= float(cell) < 1.0:
+                data_rows.append(d_idx)
+            d_idx += 1
+
+        r_idx = d_idx  # 跳过已处理的区域继续扫描
+
+        if not data_rows:
+            continue
+
+        # 解析时间列
+        time_vals = pd.Series(
+            [df_raw.iloc[r, 0] for r in data_rows],
+            dtype=object,
+        )
+        times = _parse_timestamps(time_vals, reference_date=reference_date)
+        valid_mask = times.notna().values
+
+        # 提取所有数值列（非时间列，非全空列）
+        block_data: dict[str, list] = {}
+        for c in range(1, n_cols):
+            col_label = col_names[c] if c < len(col_names) else ""
+            if not col_label:
+                continue
+            vals = pd.to_numeric(
+                pd.Series([df_raw.iloc[r, c] for r in data_rows]),
+                errors="coerce",
+            )
+            if vals.isna().all():
+                continue
+            block_data[col_label] = vals.values
+
+        if not block_data:
+            continue
+
+        block_df = pd.DataFrame(
+            block_data,
+            index=pd.DatetimeIndex(times.values),
+        )
+        block_df = block_df[valid_mask]
+        block_df = block_df[~block_df.index.duplicated(keep="first")].sort_index()
+        block_df.index.name = "time"
+        if not block_df.empty:
+            frames.append(block_df)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, axis=1, sort=True)
 
 
 # ─── 判断指标类型（8:30 单点 vs 多点）────────────────────────────────────────
@@ -253,13 +444,27 @@ def parse_indicators_excel(xlsx_path: Path) -> pd.DataFrame:
     _log(f"  [解析] {xlsx_path.name}")
     frames = []
 
+    engine = _get_excel_engine(xlsx_path)
     try:
-        xl = pd.ExcelFile(xlsx_path, engine="openpyxl")
+        xl = pd.ExcelFile(xlsx_path, engine=engine)
     except Exception as e:
         _log(f"  [跳过] 无法打开 {xlsx_path.name}: {e}")
         return pd.DataFrame()
 
+    # 从文件名提取年月（用于构建 reference_date）
+    ym = _extract_ym_from_filename(xlsx_path)
+
     for sheet_name in xl.sheet_names:
+        # 从 sheet 名提取日序号，与年月组合得到参考日期
+        reference_date: Optional[datetime.date] = None
+        if ym is not None:
+            day = _extract_day_from_sheet(sheet_name)
+            if day is not None:
+                try:
+                    reference_date = datetime.date(ym[0], ym[1], day)
+                except ValueError:
+                    pass
+
         try:
             df_raw = xl.parse(sheet_name, header=0)
         except Exception as e:
@@ -272,7 +477,18 @@ def parse_indicators_excel(xlsx_path: Path) -> pd.DataFrame:
         # 统一列名为字符串，去除前后空格
         df_raw.columns = [str(c).strip() for c in df_raw.columns]
 
-        df_parsed = _parse_sheet_as_dataframe(df_raw)
+        df_parsed = _parse_sheet_as_dataframe(df_raw, reference_date=reference_date)
+        # 若标准解析未能提取数据，启用多表块扫描回退策略
+        if df_parsed.empty:
+            try:
+                df_raw_no_header = xl.parse(sheet_name, header=None)
+                df_parsed = _extract_blocks_from_raw_sheet(
+                    df_raw_no_header,
+                    reference_date=reference_date,
+                )
+            except Exception:
+                pass
+
         if df_parsed.empty:
             _log(f"    [跳过 sheet] {sheet_name}：无法解析时间列或数据列")
             continue
