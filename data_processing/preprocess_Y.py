@@ -85,13 +85,13 @@ Y_STRICT_HI: Optional[float] = None   # e.g. 72.0
 
 # 新1# 产线关键词（用于匹配列名/sheet名，正则表达式）
 _PATTERN_XIN1 = re.compile(
-    r"(新\s*1\s*[##]?|xin\s*1|新一|line\s*1|1\s*[##]\s*精矿)",
+    r"(新\s*1\s*#{0,2}|xin\s*1|新一|line\s*1|1\s*#{1,2}\s*精矿)",
     re.IGNORECASE,
 )
 
 # 新2# 产线关键词
 _PATTERN_XIN2 = re.compile(
-    r"(新\s*2\s*[##]?|xin\s*2|新二|line\s*2|2\s*[##]\s*精矿)",
+    r"(新\s*2\s*#{0,2}|xin\s*2|新二|line\s*2|2\s*#{1,2}\s*精矿)",
     re.IGNORECASE,
 )
 
