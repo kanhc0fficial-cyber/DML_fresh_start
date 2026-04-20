@@ -116,13 +116,13 @@ if TORCH_AVAILABLE:
             self.shared = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim // 2),
                 nn.LayerNorm(hidden_dim // 2),
-                nn.ReLU(),
+                nn.SiLU(),
             )
             self.proj_causal = nn.Linear(hidden_dim // 2, latent_dim_causal)
             self.fc_mu_recon = nn.Linear(hidden_dim // 2, latent_dim_recon)
@@ -157,9 +157,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim // 2),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim // 2, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
 
@@ -172,9 +172,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, 1),
             )
 
@@ -278,6 +278,12 @@ if TORCH_AVAILABLE:
                             loss_causal.backward(retain_graph=True)
                             g_causal = {n: shared_params_dict[n].grad.clone() if shared_params_dict[n].grad is not None
                                         else torch.zeros_like(shared_params_dict[n]) for n in shared_param_names}
+                            # 保存因果头和投影层的梯度（它们不参与重建损失的计算图）
+                            causal_only_params = (list(self.head_Y.parameters())
+                                                  + list(self.head_D.parameters())
+                                                  + list(self.encoder.proj_causal.parameters()))
+                            g_causal_only = [p.grad.clone() if p.grad is not None
+                                             else torch.zeros_like(p) for p in causal_only_params]
                             optimizer.zero_grad()
                             loss_recon_full.backward()
                             for name in shared_param_names:
@@ -288,8 +294,12 @@ if TORCH_AVAILABLE:
                                 if dot < 0:
                                     g_r = g_r - (dot / ((g_c ** 2).sum() + 1e-12)) * g_c
                                 p.grad = g_c + alpha * g_r
-                            for p in list(self.head_Y.parameters()) + list(self.head_D.parameters()):
-                                if p.grad is None: p.grad = torch.zeros_like(p)
+                            # 恢复因果头和投影层的梯度
+                            for p, g in zip(causal_only_params, g_causal_only):
+                                if p.grad is not None:
+                                    p.grad = p.grad + g
+                                else:
+                                    p.grad = g
                             nn.utils.clip_grad_norm_(all_params, GRAD_CLIP); optimizer.step()
                         else:
                             loss = loss_causal + alpha * loss_recon_full

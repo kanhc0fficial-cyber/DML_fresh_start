@@ -159,10 +159,10 @@ if TORCH_AVAILABLE:
             self.shared = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
             )
 
             # 因果流：h → z_causal（确定性投影）
@@ -221,9 +221,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
 
@@ -238,9 +238,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, 1),
             )
 
@@ -424,39 +424,40 @@ if TORCH_AVAILABLE:
                                 else:
                                     g_causal[name] = torch.zeros_like(p)
 
+                            # 保存因果头和投影层的梯度（它们不参与重建损失的计算图）
+                            causal_only_params = (
+                                list(self.head_Y.parameters())
+                                + list(self.head_D.parameters())
+                                + list(self.encoder.proj_causal.parameters())
+                            )
+                            g_causal_only = [
+                                p.grad.clone() if p.grad is not None
+                                else torch.zeros_like(p) for p in causal_only_params
+                            ]
+
                             # Step 2: 计算重建损失梯度
                             optimizer.zero_grad()
                             loss_recon_full.backward()
-                            g_recon = {}
-                            for name in shared_param_names:
-                                p = shared_params_dict[name]
-                                if p.grad is not None:
-                                    g_recon[name] = p.grad.clone()
-                                else:
-                                    g_recon[name] = torch.zeros_like(p)
 
                             # Step 3: 投影冲突的重建梯度
                             for name in shared_param_names:
-                                dot_product = (g_causal[name] * g_recon[name]).sum()
+                                g_r = shared_params_dict[name].grad.clone() if shared_params_dict[name].grad is not None else torch.zeros_like(shared_params_dict[name])
+                                g_c = g_causal[name]
+                                dot_product = (g_c * g_r).sum()
                                 if dot_product < 0:
                                     # 冲突：投影 g_recon 到 g_causal 的正交补空间
-                                    norm_sq = (g_causal[name] ** 2).sum() + 1e-12
-                                    g_recon[name] = g_recon[name] - (dot_product / norm_sq) * g_causal[name]
+                                    norm_sq = (g_c ** 2).sum() + 1e-12
+                                    g_r = g_r - (dot_product / norm_sq) * g_c
 
                                 # 组合梯度并应用
-                                shared_params_dict[name].grad = g_causal[name] + alpha * g_recon[name]
+                                shared_params_dict[name].grad = g_c + alpha * g_r
 
-                            # 非共享参数保持原始梯度（因果头和解码器的梯度）
-                            # 因果头参数的梯度来自 loss_causal.backward(retain_graph=True)
-                            # 解码器参数的梯度来自 loss_recon_full.backward()
-                            # 这里需要重新计算非共享参数的梯度
-                            # 为简单起见，对非共享参数直接使用组合损失
-                            for name, param in self.head_Y.named_parameters():
-                                if param.grad is None:
-                                    param.grad = torch.zeros_like(param)
-                            for name, param in self.head_D.named_parameters():
-                                if param.grad is None:
-                                    param.grad = torch.zeros_like(param)
+                            # 恢复因果头和投影层的梯度
+                            for p, g in zip(causal_only_params, g_causal_only):
+                                if p.grad is not None:
+                                    p.grad = p.grad + g
+                                else:
+                                    p.grad = g
 
                             nn.utils.clip_grad_norm_(all_params, GRAD_CLIP)
                             optimizer.step()
