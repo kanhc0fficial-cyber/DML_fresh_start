@@ -76,10 +76,21 @@ warnings.filterwarnings("ignore")
 try:
     from tqdm import tqdm
 except ImportError:
-    def tqdm(it, **kw):
-        items = list(it)
-        print(f"[{kw.get('desc', '')}] 共 {len(items)} 个任务（建议 pip install tqdm）")
-        return items
+    class tqdm:
+        """tqdm 不可用时的兼容性 stub，支持 with 语句和 .update() 调用。"""
+        def __init__(self, iterable=None, **kw):
+            self._it = list(iterable) if iterable is not None else []
+            self._desc = kw.get("desc", "")
+            self._total = kw.get("total", len(self._it))
+            print(f"[{self._desc}] 共 {self._total} 个任务（建议 pip install tqdm）")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def __iter__(self):
+            return iter(self._it)
+        def update(self, n=1):
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -480,7 +491,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
     # DML 聚合
     dml_arr     = np.array(theta_dml_list)
     theta_dml_med = float(np.median(dml_arr))
-    dml_std_b   = float(np.std(dml_arr))
+    dml_std_b   = float(np.std(dml_arr, ddof=1)) if len(dml_arr) > 1 else 0.0
     cv_dml      = dml_std_b / (abs(theta_dml_med) + 1e-8)
     sr_dml      = float(np.mean(np.sign(dml_arr) == np.sign(theta_dml_med)))
     SE_dml      = max(dml_std_b, 1e-8)
@@ -493,7 +504,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
     if len(theta_rl_list) >= max(1, min_success // 2):
         rl_arr      = np.array(theta_rl_list)
         theta_rl_med = float(np.median(rl_arr))
-        rl_std_b    = float(np.std(rl_arr))
+        rl_std_b    = float(np.std(rl_arr, ddof=1)) if len(rl_arr) > 1 else 0.0
         cv_rl       = rl_std_b / (abs(theta_rl_med) + 1e-8)
         sr_rl       = float(np.mean(np.sign(rl_arr) == np.sign(theta_rl_med)))
         SE_rl       = max(rl_std_b, 1e-8)
