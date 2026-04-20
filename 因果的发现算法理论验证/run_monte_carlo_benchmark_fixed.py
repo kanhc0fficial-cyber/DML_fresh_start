@@ -21,7 +21,7 @@ run_monte_carlo_benchmark.py  [修正版]
   - Coupled (TCDF → CUTS+ → NTS-NOTEARS 三阶段耦合)
 
 新增创新方案:
-  - MultiScale-NTS [方案二] 多尺度并行卷积特征融合 + 共享NOTEARS约束
+  - MultiScale-NTS [方案二] 多尺度空洞卷积特征融合（dilation=[1,2,4]）+ 共享NOTEARS约束
 
 学术意义:
   这是 NeurIPS/ICLR 等顶会标准的因果发现算法评估范式
@@ -130,37 +130,48 @@ class NTS_NOTEARSNet(nn.Module):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 创新方案二：MultiScale-NTS  [修正版]
+# 创新方案二：MultiScale-NTS（多尺度空洞卷积版）[修正版]
 # ═══════════════════════════════════════════════════════════════════════════
 class MultiScaleNTSNet(nn.Module):
     """
-    三路并行多尺度卷积 + 可学习融合权重 + 共享 NOTEARS 约束
+    多尺度空洞卷积（Multi-Scale Dilated Convolution, MSDC）
+    + 可学习融合权重 + 共享 NOTEARS 约束
+
+    空洞率设计：DILATION_RATES = [1, 2, 4]
+      - dilation=1: 感受野 = 3（短程邻近依赖）
+      - dilation=2: 感受野 = 5（中程时延依赖）
+      - dilation=4: 感受野 = 9（长程跨窗依赖，几乎覆盖 WINDOW_SIZE=10）
+
+    理论依据：
+      1. 感受野多样性：不同空洞率等价于多分辨率时间分析，在同一 kernel_size=3
+         下以指数级扩大感受野，参数量与标准多尺度卷积完全相同。
+      2. Granger 因果完整性：工业时序数据存在多阶因果时延，空洞卷积可在
+         单层内同时捕获短/中/长程 Granger 依赖，比大核卷积更参数高效。
+      3. 与 NOTEARS 兼容性：空洞卷积仅改变特征提取分支，共享的可微 DAG 约束
+         矩阵 W 完全不受影响，理论框架保持自洽。
 
     修正点：
       [B6] alpha 初始化改为 zeros（softmax(zeros) = 均匀分布，梯度空间更干净）
-
-    注：原版初始化 ones/n 在数学上等价（softmax 对平移不变），但 zeros 是更规范的做法。
     """
-    KERNEL_SIZES = [3, 5]   # 第三路动态追加 WINDOW_SIZE
+    DILATION_RATES = [1, 2, 4]   # 对应感受野: 3, 5, 9
 
     def __init__(self, d):
         super().__init__()
         self.d = d
         self.W = nn.Parameter(torch.empty(d, d).uniform_(-0.01, 0.01))
 
-        kernel_sizes = self.KERNEL_SIZES + [WINDOW_SIZE]
         self.convs = nn.ModuleList([
             nn.Sequential(
-                nn.Conv1d(d, d * 8, kernel_size=ks, groups=d),
+                nn.Conv1d(d, d * 8, kernel_size=3, dilation=r, groups=d),
                 nn.ReLU(),
                 nn.AdaptiveAvgPool1d(1),
                 nn.Conv1d(d * 8, d, kernel_size=1, groups=d)
             )
-            for ks in kernel_sizes
+            for r in self.DILATION_RATES
         ])
 
         # [B6] zeros 初始化：梯度更新从对称点出发，收敛更稳定
-        self.alpha = nn.Parameter(torch.zeros(len(kernel_sizes)))
+        self.alpha = nn.Parameter(torch.zeros(len(self.DILATION_RATES)))
 
     def forward(self, x):
         x_agg = torch.matmul(x, self.W)
@@ -403,7 +414,7 @@ ALGORITHM_CN_NAME = {
     "cuts_plus":      "CUTS+（基线）",
     "nts_notears":    "NTS-NOTEARS（基线）",
     "coupled":        "Coupled-三阶段（基线）",
-    "multiscale_nts": "MultiScale-NTS（方案二：多尺度卷积）",
+    "multiscale_nts": "MultiScale-NTS（方案二：多尺度空洞卷积）",
 }
 
 
@@ -551,11 +562,16 @@ def generate_markdown_report(algorithm: str, df_results: pd.DataFrame, stats: di
         "multiscale_nts": """
 ## 创新方案说明
 
-**MultiScale-NTS（方案二：多尺度并行卷积特征融合）**
+**MultiScale-NTS（方案二：多尺度空洞卷积特征融合）**
 
-- **核心改动**：三路并行 Conv1d 分支（kernel=3/5/10），通过可学习融合权重 α
+- **核心改动**：三路并行空洞 Conv1d 分支（kernel=3，dilation=1/2/4），感受野分别为
+  3/5/9，覆盖 WINDOW_SIZE=10 内的短/中/长程时序依赖。通过可学习融合权重 α
   （Softmax归一化，zeros初始化）自适应加权，共享单一 NOTEARS DAG 约束。
-- **学术依据**：多尺度时序卷积在工业动态建模中已被广泛验证，
+- **理论自洽性**：
+  1. 空洞率以指数级扩大感受野，参数量不变，比大核卷积更参数高效；
+  2. 不同空洞率对应不同 Granger 时延，可完整捕获多阶因果效应；
+  3. 空洞卷积仅改变特征提取层，与共享可微 DAG 约束 W 完全兼容，框架自洽。
+- **学术依据**：多尺度空洞卷积在工业时序建模与 WaveNet 等领域已被广泛验证，
   引入因果图学习框架属于跨领域组合创新。
 """,
     }.get(algorithm, "")
