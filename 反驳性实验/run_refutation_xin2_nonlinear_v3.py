@@ -42,6 +42,7 @@ import argparse
 import hashlib
 import json
 import os
+import threading
 import warnings
 import concurrent.futures
 
@@ -60,10 +61,21 @@ warnings.filterwarnings("ignore")
 try:
     from tqdm import tqdm
 except ImportError:
-    def tqdm(it, **kw):
-        items = list(it)
-        print(f"[{kw.get('desc', '')}] 共 {len(items)} 个任务（建议 pip install tqdm）")
-        return items
+    class tqdm:
+        """tqdm 不可用时的兼容性 stub，支持 with 语句和 .update() 调用。"""
+        def __init__(self, iterable=None, **kw):
+            self._it = list(iterable) if iterable is not None else []
+            self._desc = kw.get("desc", "")
+            self._total = kw.get("total", len(self._it))
+            print(f"[{self._desc}] 共 {self._total} 个任务（建议 pip install tqdm）")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def __iter__(self):
+            return iter(self._it)
+        def update(self, n=1):
+            pass
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -99,6 +111,9 @@ for _d in [PLACEBO_OUT_DIR, RANDOM_CONFOUNDER_OUT_DIR,
     os.makedirs(_d, exist_ok=True)
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# 线程安全锁：保护 PyTorch 模型初始化时的全局 RNG 状态
+_TORCH_SEED_LOCK = threading.Lock()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -332,10 +347,11 @@ def _train_vae_stage1(encoder: VAEEncoder, decoder: VAEDecoder,
     """
     params    = list(encoder.parameters()) + list(decoder.parameters())
     optimizer = optim.Adam(params, lr=0.002)
-    loader    = DataLoader(TensorDataset(X_train), batch_size=256, shuffle=False)
 
     val_split = max(1, int(len(X_train) * 0.1))
     X_iv      = X_train[-val_split:]
+    X_tr_only = X_train[:-val_split]
+    loader    = DataLoader(TensorDataset(X_tr_only), batch_size=256, shuffle=True)
     best_loss = float("inf")
     pat_cnt   = 0
     best_enc  = None
@@ -397,11 +413,13 @@ def _train_head_stage2(head: PredHead, mu_train: torch.Tensor,
     梯度不会流回 encoder。
     """
     optimizer = optim.Adam(head.parameters(), lr=0.002)
-    loader    = DataLoader(TensorDataset(mu_train, target_train),
-                           batch_size=256, shuffle=False)
     val_split = max(1, int(len(mu_train) * 0.1))
     mu_iv     = mu_train[-val_split:]
     t_iv      = target_train[-val_split:]
+    mu_tr_only = mu_train[:-val_split]
+    t_tr_only  = target_train[:-val_split]
+    loader    = DataLoader(TensorDataset(mu_tr_only, t_tr_only),
+                           batch_size=256, shuffle=True)
     best_loss = float("inf")
     pat_cnt   = 0
     best_state = None
@@ -504,8 +522,9 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             val_start = k * block_size
             val_end   = (k + 1) * block_size if k < K_FOLDS - 1 else N
 
-            torch.manual_seed(base_seed * 100 + k)
-            np.random.seed((base_seed * 100 + k) % (2**31))
+            # 使用线程锁保护模型初始化时的全局 RNG 状态
+            # （torch.manual_seed 是全局的，多线程并发时会有竞争条件）
+            _fold_seed = (base_seed * 100 + k) % (2**31)
 
             Xtr_np = seqs_X[:train_end]
             Xtr    = torch.tensor(Xtr_np).to(device)
@@ -516,8 +535,10 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             Dvl    = tgt_D[val_start:val_end]
 
             # ── Stage 1：训练 VAE（只重建 X，不涉及 Y/D）──────────
-            encoder = VAEEncoder(input_dim, LATENT_DIM).to(device)
-            decoder = VAEDecoder(LATENT_DIM, SEQ_LEN, input_dim).to(device)
+            with _TORCH_SEED_LOCK:
+                torch.manual_seed(_fold_seed)
+                encoder = VAEEncoder(input_dim, LATENT_DIM).to(device)
+                decoder = VAEDecoder(LATENT_DIM, SEQ_LEN, input_dim).to(device)
             _train_vae_stage1(encoder, decoder, Xtr, device)
 
             # 冻结 encoder（Stage 2 的梯度不流回 encoder）
@@ -531,8 +552,10 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
                 mu_vl = encoder.encode_mean(Xvl)   # shape: [val_size, LATENT_DIM]
 
             # ── Stage 2：独立训练 head_Y 和 head_D ───────────────
-            head_Y = PredHead(LATENT_DIM).to(device)
-            head_D = PredHead(LATENT_DIM).to(device)
+            with _TORCH_SEED_LOCK:
+                torch.manual_seed(_fold_seed + 1000)
+                head_Y = PredHead(LATENT_DIM).to(device)
+                head_D = PredHead(LATENT_DIM).to(device)
             _train_head_stage2(head_Y, mu_tr, Ytr, device)
             _train_head_stage2(head_D, mu_tr, Dtr, device)
 
@@ -622,7 +645,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
     # DML 聚合
     arr_dml     = np.array(theta_dml_list)
     theta_dml_med = float(np.median(arr_dml))
-    std_dml     = float(np.std(arr_dml))
+    std_dml     = float(np.std(arr_dml, ddof=1)) if len(arr_dml) > 1 else 0.0
     cv_dml      = std_dml / (abs(theta_dml_med) + 1e-8)
     sr_dml      = float(np.mean(np.sign(arr_dml) == np.sign(theta_dml_med)))
     SE_dml      = max(std_dml, 1e-8)
@@ -634,7 +657,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
     # R-Learner 聚合
     arr_rl      = np.array(theta_rl_list)
     theta_rl_med = float(np.median(arr_rl))
-    std_rl      = float(np.std(arr_rl))
+    std_rl      = float(np.std(arr_rl, ddof=1)) if len(arr_rl) > 1 else 0.0
     cv_rl       = std_rl / (abs(theta_rl_med) + 1e-8)
     sr_rl       = float(np.mean(np.sign(arr_rl) == np.sign(theta_rl_med)))
     SE_rl       = max(std_rl, 1e-8)
