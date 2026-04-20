@@ -134,7 +134,9 @@ def compute_true_ate_linear(
             if func_info["type"] == "linear":
                 path_coeff *= func_info["params"]["a"]
             elif func_info["type"] == "poly":
-                # poly: a*x^2 + b*x → 在 x=0 附近的局部线性效应 ≈ b
+                # poly: a*x^2 + b*x → 局部线性近似 ≈ b（在 x=0 附近）
+                # 注意：此近似仅在 x 接近 0 时有效，远离 0 时偏差增大
+                # 因此解析 ATE 仅作为辅助参考，仿真 ATE 始终优先
                 path_coeff *= func_info["params"]["b"]
             else:
                 all_linear = False
@@ -612,14 +614,16 @@ def run_single_experiment(
             # 兜底：使用 T 的祖先（即使不存在共同祖先）
             safe_vars = [v for v in t_ancestors if v != t_idx and v != y_idx]
         if not safe_vars:
-            # 最终兜底：生成一个随机无关变量作为占位符
-            rng_placeholder = np.random.RandomState(seed + 5555)
-            X_confounders = rng_placeholder.randn(n_samples, 1)
-            confounder_indices = [-1]  # 标记占位
+            # 最终兜底：无法找到安全控制变量
+            # DML 在无混杂情况下等价于朴素 OLS，使用单个常数列作为占位
+            warnings.warn(f"Treatment={t_idx}, Outcome={y_idx}: 无混杂变量且无安全祖先，"
+                          "DML 退化为朴素回归")
+            X_confounders = np.ones((n_samples, 1))
         else:
             confounder_indices = sorted(safe_vars)
+            X_confounders = X_data[:, confounder_indices]
 
-    if confounder_indices and confounder_indices[0] != -1:
+    if confounder_indices and confounder_indices[0] >= 0:
         X_confounders = X_data[:, confounder_indices]
 
     # 6. DML 估计
@@ -789,8 +793,7 @@ def run_monte_carlo_validation(
             if len(confounder_indices) > 0:
                 X_ctrl = X_data[:, confounder_indices]
             else:
-                rng_ph = np.random.RandomState(data_seed + 5555)
-                X_ctrl = rng_ph.randn(n_samples, 1)
+                X_ctrl = np.ones((n_samples, 1))
 
             theta_hat, se, ci_lower, ci_upper = dml_estimate_cross_fitting(
                 Y, D, X_ctrl,
@@ -1024,8 +1027,7 @@ def run_consistency_validation(
                 if len(confounder_indices) > 0:
                     X_ctrl = X_data[:, confounder_indices]
                 else:
-                    rng_ph = np.random.RandomState(data_seed + 5555)
-                    X_ctrl = rng_ph.randn(n_s, 1)
+                    X_ctrl = np.ones((n_s, 1))
 
                 theta_hat, se, _, _ = dml_estimate_cross_fitting(
                     Y, D, X_ctrl, ml_method=ml_method, seed=data_seed,
@@ -1130,7 +1132,9 @@ def run_confounding_comparison(
                 gen, adj_true, edge_funcs, t_idx, y_idx,
                 noise_scale=noise_scale,
             )
-            ate_true = ate_analytic if abs(ate_analytic) > 1e-6 else ate_sim
+            ate_true = ate_sim
+            if abs(ate_sim) < 1e-6 and abs(ate_analytic) > 1e-6:
+                ate_true = ate_analytic
 
             D = X_data[:, t_idx]
             Y = X_data[:, y_idx]
@@ -1155,8 +1159,7 @@ def run_confounding_comparison(
                 if safe_vars:
                     X_A = X_data[:, sorted(safe_vars)]
                 else:
-                    rng_ph = np.random.RandomState(seed + 5555)
-                    X_A = rng_ph.randn(n_samples, 1)
+                    X_A = np.ones((n_samples, 1))
 
             theta_A, se_A, ci_lo_A, ci_hi_A = dml_estimate_cross_fitting(
                 Y, D, X_A, ml_method=ml_method, seed=seed,
@@ -1168,8 +1171,9 @@ def run_confounding_comparison(
             })
 
             # 方案 B：遗漏混杂（使用随机无关变量代替）
+            N_NOISE_PLACEHOLDERS = 3  # 无信息噪声变量数，模拟遗漏真实混杂的场景
             rng = np.random.RandomState(seed + 1000)
-            X_B = rng.randn(n_samples, 3)  # 3 个随机噪声变量
+            X_B = rng.randn(n_samples, N_NOISE_PLACEHOLDERS)
             theta_B, se_B, ci_lo_B, ci_hi_B = dml_estimate_cross_fitting(
                 Y, D, X_B, ml_method=ml_method, seed=seed,
             )
