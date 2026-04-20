@@ -146,6 +146,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SEQ_LEN             = 6
 EMBARGO_GAP         = 4
 K_FOLDS             = 4
+MAX_EPOCHS_VAE      = 60     # baseline Stage 1 VAE 最大轮数（与 v3/v4 一致）
+MAX_EPOCHS_HEAD     = 40     # baseline Stage 2 预测头最大轮数（与 v3/v4 一致）
 PATIENCE            = 8
 MIN_TRAIN_SIZE      = 100
 MIN_VALID_RESIDUALS = 50
@@ -706,7 +708,7 @@ def _train_vae_stage1_baseline(encoder: SingleStreamVAEEncoder,
     best_enc  = None
     best_dec  = None
 
-    for epoch in range(60):  # MAX_EPOCHS_VAE from v3/v4
+    for epoch in range(MAX_EPOCHS_VAE):
         beta = BETA_KL * min(1.0, epoch / max(1, ANNEAL_EPOCHS))
         encoder.train(); decoder.train()
         for (bx,) in loader:
@@ -759,7 +761,7 @@ def _train_head_stage2_baseline(head: PredHead, mu_train: torch.Tensor,
     pat_cnt   = 0
     best_state = None
 
-    for _ in range(40):  # MAX_EPOCHS_HEAD from v3/v4
+    for _ in range(MAX_EPOCHS_HEAD):
         head.train()
         for bmu, bt in loader:
             optimizer.zero_grad()
