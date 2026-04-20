@@ -133,7 +133,7 @@ def main():
         X.index = pd.to_datetime(X.index)
     if X.index.tz is not None:
         X.index = X.index.tz_convert(None)
-    X_re = X.resample('10min').mean().ffill().bfill()
+    X_re = X.resample('10min').mean().ffill()
 
     if len(X_re) < MIN_SAMPLES:
         raise ValueError(
