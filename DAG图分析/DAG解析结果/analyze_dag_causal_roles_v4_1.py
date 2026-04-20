@@ -1,7 +1,18 @@
 """
-analyze_dag_causal_roles.py (v4.2 - 双产线支持 + 兼容 annotated CSV 格式)
+analyze_dag_causal_roles.py (v4.3 - 来源文件选择 + 双产线支持 + 兼容 annotated CSV 格式)
 ========================================================
 通用 DAG 因果角色解析脚本（支持命令行参数）
+
+核心改进（v4.3，相对于 v4.2）：
+  1. ✅ 来源文件选择：新增 --search-dir / --algo / --list 参数，
+         无需手动指定完整路径，可从因果发现结果目录自动匹配 GraphML 文件：
+         - --search-dir DIR：在指定目录（可多次传入）中搜索 .graphml 文件
+         - --algo NAME：按算法名称过滤（如 tcdf / dynotears / granger / biattn_cuts 等）
+         - --list：列出所有可选来源文件后退出，不执行分析
+         - graphml_path 变为可选；当省略时通过 --search-dir + --algo + --line 自动确定
+  2. ✅ 默认搜索路径：自动在「多种方法因果发现/因果发现结果」目录搜索
+  3. ✅ 双产线支持（v4.2 保留）
+  4. ✅ 兼容 annotated CSV 格式（v4.2 保留）
 
 核心改进（v4.2，相对于 v4.1）：
   1. ✅ 双产线支持：新增 --line 参数（xin1/xin2），自动按 Group 过滤变量
@@ -36,20 +47,38 @@ v4.1 已有改进（保留）：
   - 工具变量：IV ∈ ancestors(T)，且移除 T 后 IV 与 Y 全局不连通（排他性）
 
 用法：
-  python analyze_dag_causal_roles.py <graphml_path> [options]
+  python analyze_dag_causal_roles.py [graphml_path] [options]
+
+  位置参数（可选）：
+    graphml_path          GraphML 文件路径（省略时通过 --algo/--search-dir/--line 自动定位）
+
+  来源选择参数（v4.3 新增）：
+    --list                列出可用 GraphML 文件后退出
+    --algo NAME           按算法名过滤（如 tcdf / dynotears / granger / biattn_cuts 等）
+    --search-dir DIR      追加搜索目录（可多次使用，默认自动包含因果发现结果目录）
 
   必需参数：
-    graphml_path          GraphML 文件的绝对路径
+    --line                产线选择 xin1/xin2（必需，指定分析哪条浮选产线）
 
   可选参数：
-    --line                产线选择 xin1/xin2（必需，指定分析哪条浮选产线）
     --var-csv             变量元数据 CSV 路径（支持 annotated 或 operability 格式）
-    --output-dir          输出目录（默认：与 GraphML 同目录）
+    --output-dir          输出目录（默认：与 GraphML 同目录下 <stem>_causal_analysis/）
     --y-node              目标变量名称（默认：自动检测）
     --verbose             详细输出模式
 
 示例：
+  # 直接指定文件
   python analyze_dag_causal_roles.py dag_xin1.graphml --line xin1
+
+  # 列出所有可用 GraphML 文件
+  python analyze_dag_causal_roles.py --list
+
+  # 按算法+产线自动定位
+  python analyze_dag_causal_roles.py --algo tcdf --line xin1
+
+  # 在额外目录中搜索
+  python analyze_dag_causal_roles.py --algo dynotears --line xin2 --search-dir /data/results
+
   python analyze_dag_causal_roles.py dag_xin2.graphml --line xin2 --verbose
   python analyze_dag_causal_roles.py dag.graphml --line xin1 --var-csv vars_annotated.csv
 """
@@ -409,37 +438,211 @@ def get_meta_str(node, meta_lookup, verbose=False):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 来源文件发现（v4.3 新增）
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 默认搜索目录：因果发现算法输出目录（多种方法因果发现/因果发现结果）
+_DEFAULT_GRAPHML_SEARCH_DIRS = [
+    os.path.join(DEFAULT_PROJECT_ROOT, "多种方法因果发现", "因果发现结果"),
+]
+
+
+def discover_graphml_files(search_dirs=None, algo=None, line=None):
+    """
+    在指定目录中递归搜索 .graphml 文件，按算法名和产线过滤。
+
+    参数：
+      search_dirs: 目录路径列表（None 则使用 _DEFAULT_GRAPHML_SEARCH_DIRS）
+      algo:        算法名过滤关键字（如 'tcdf'、'dynotears'、'granger'）；
+                   None 表示不过滤
+      line:        产线过滤关键字（'xin1' / 'xin2'）；None 表示不过滤
+
+    返回：
+      list of dict，每项包含：
+        {
+          "path":     GraphML 文件绝对路径,
+          "filename": 文件名（不含目录）,
+          "algo":     推断的算法名（文件名中 _real_dag_ 之前的部分，或完整 stem）,
+          "line":     推断的产线（文件名中含 'xin1'/'xin2' 时填入，否则为 '?'）,
+          "dir":      所在目录,
+        }
+      按文件名字母序排序。
+    """
+    if search_dirs is None:
+        search_dirs = _DEFAULT_GRAPHML_SEARCH_DIRS
+
+    results = []
+    seen = set()  # 避免重复（同一文件被多个搜索目录命中）
+
+    for root_dir in search_dirs:
+        if not os.path.isdir(root_dir):
+            continue
+        for dirpath, _dirnames, filenames in os.walk(root_dir):
+            for fname in sorted(filenames):
+                if not fname.lower().endswith(".graphml"):
+                    continue
+                fpath = os.path.abspath(os.path.join(dirpath, fname))
+                if fpath in seen:
+                    continue
+                seen.add(fpath)
+
+                stem = os.path.splitext(fname)[0]  # 去掉 .graphml
+
+                # 推断算法名：文件名格式常见为 {algo}_real_dag_{line}.graphml
+                if "_real_dag_" in stem:
+                    algo_inferred = stem.split("_real_dag_")[0]
+                    line_inferred = stem.split("_real_dag_")[-1]
+                elif "_space_time_dag_" in stem:
+                    # 如 tcdf_space_time_dag_xin1
+                    algo_inferred = stem.split("_space_time_dag_")[0]
+                    line_inferred = stem.split("_space_time_dag_")[-1]
+                else:
+                    algo_inferred = stem
+                    # 尝试从文件名末尾提取产线
+                    line_inferred = "?"
+                    for ln in ("xin1", "xin2"):
+                        if stem.endswith(f"_{ln}") or stem.endswith(ln):
+                            line_inferred = ln
+                            break
+
+                # 按算法名过滤
+                if algo is not None and algo.lower() not in algo_inferred.lower():
+                    continue
+
+                # 按产线过滤
+                if line is not None and line_inferred != "?" and line_inferred != line:
+                    continue
+
+                results.append({
+                    "path":     fpath,
+                    "filename": fname,
+                    "algo":     algo_inferred,
+                    "line":     line_inferred,
+                    "dir":      dirpath,
+                })
+
+    results.sort(key=lambda x: x["filename"])
+    return results
+
+
+def print_graphml_list(results, search_dirs):
+    """打印可用 GraphML 文件列表（--list 模式）。"""
+    print("=" * 90)
+    print("  可用 GraphML 来源文件列表")
+    print("=" * 90)
+    print(f"  搜索目录: {[str(d) for d in search_dirs]}")
+    print()
+    if not results:
+        print("  [未找到] 指定目录中没有 .graphml 文件。")
+        print("  请先运行因果发现脚本（如 run_tcdf_space_time_dag.py）生成图文件，")
+        print("  或使用 --search-dir 指定其他搜索目录。")
+        return
+
+    col_idx = 4
+    col_algo = 30
+    col_line = 6
+    col_file = 50
+    print(f"  {'#':<{col_idx}} {'算法名':<{col_algo}} {'产线':<{col_line}} {'文件名':<{col_file}}")
+    print(f"  {'-'*col_idx} {'-'*col_algo} {'-'*col_line} {'-'*col_file}")
+    for i, item in enumerate(results, 1):
+        print(f"  {i:<{col_idx}} {item['algo']:<{col_algo}} {item['line']:<{col_line}} {item['filename']:<{col_file}}")
+    print()
+    print("  使用示例：")
+    if results:
+        ex = results[0]
+        line_ex = ex["line"] if ex["line"] != "?" else "xin1"
+        print(f"    python analyze_dag_causal_roles.py --algo {ex['algo']} --line {line_ex}")
+        print(f"    python analyze_dag_causal_roles.py \"{ex['path']}\" --line {line_ex}")
+    print("=" * 90)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 命令行参数解析
 # ─────────────────────────────────────────────────────────────────────────────
 
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="通用 DAG 因果角色解析脚本（v4.2 - 双产线支持 + 兼容 annotated CSV）",
+        description="通用 DAG 因果角色解析脚本（v4.3 - 来源文件选择 + 双产线支持 + 兼容 annotated CSV）",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法：
+  # 直接指定 GraphML 文件
   python %(prog)s dag_xin1.graphml --line xin1
   python %(prog)s dag_xin2.graphml --line xin2 --verbose
+
+  # 列出所有可用 GraphML 文件
+  python %(prog)s --list
+
+  # 按算法+产线自动定位文件（v4.3 新增）
+  python %(prog)s --algo tcdf --line xin1
+  python %(prog)s --algo dynotears --line xin2 --verbose
+  python %(prog)s --algo granger --line xin1
+
+  # 在额外目录中搜索（v4.3 新增）
+  python %(prog)s --algo biattn_cuts --line xin1 --search-dir /data/causal_results
+
+  # 其他选项
   python %(prog)s dag.graphml --line xin1 --var-csv vars_annotated.csv
   python %(prog)s dag.graphml --line xin2 --y-node "y_grade" --verbose
         """,
     )
 
+    # ── 来源文件（位置参数，可选） ──────────────────────────────────────────
     parser.add_argument(
         "graphml_path",
+        nargs="?",
+        default=None,
         type=str,
-        help="GraphML 文件的绝对路径",
+        help=(
+            "GraphML 文件路径（可选）。"
+            "省略时通过 --algo/--line/--search-dir 自动定位。"
+        ),
     )
 
+    # ── 来源文件选择（v4.3 新增） ────────────────────────────────────────────
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_files",
+        help="列出所有可用的 GraphML 文件后退出（不执行分析）",
+    )
+
+    parser.add_argument(
+        "--algo",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help=(
+            "按算法名关键字过滤 GraphML 文件（如 tcdf / dynotears / granger / "
+            "biattn_cuts / multiscale_nts / mb_cuts）。"
+            "当 graphml_path 省略时，自动匹配算法名中含 NAME 的文件。"
+        ),
+    )
+
+    parser.add_argument(
+        "--search-dir",
+        type=str,
+        action="append",
+        default=None,
+        dest="search_dirs",
+        metavar="DIR",
+        help=(
+            "追加 GraphML 搜索目录（可多次使用）。"
+            "默认自动包含「多种方法因果发现/因果发现结果」。"
+        ),
+    )
+
+    # ── 产线选择 ─────────────────────────────────────────────────────────────
     parser.add_argument(
         "--line",
         type=str,
-        required=True,
+        default=None,
         choices=["xin1", "xin2"],
-        help="产线选择（必需）: xin1=新1#浮选产线(Group A+C), xin2=新2#浮选产线(Group B+C)",
+        help="产线选择: xin1=新1#浮选产线(Group A+C), xin2=新2#浮选产线(Group B+C)",
     )
 
+    # ── 其他选项 ─────────────────────────────────────────────────────────────
     parser.add_argument(
         "--var-csv",
         type=str,
@@ -461,7 +664,7 @@ def parse_args():
         "--output-dir",
         type=str,
         default=None,
-        help="输出目录（默认：与 GraphML 文件同目录）",
+        help="输出目录（默认：与 GraphML 文件同目录下 <stem>_causal_analysis/）",
     )
 
     parser.add_argument(
@@ -695,19 +898,103 @@ def main():
     """主函数"""
     args = parse_args()
 
-    graphml_path = args.graphml_path
-    var_csv = args.var_csv or _find_default_var_csv()
-    output_dir = args.output_dir
-    y_node_override = args.y_node
     verbose = args.verbose
     line = args.line
 
-    # 验证输入文件
+    # ── 构建搜索目录列表 ──────────────────────────────────────────────────────
+    search_dirs = list(_DEFAULT_GRAPHML_SEARCH_DIRS)
+    if args.search_dirs:
+        for d in args.search_dirs:
+            if d not in search_dirs:
+                search_dirs.append(d)
+
+    # ── --list 模式：列出可用文件后退出 ─────────────────────────────────────
+    if args.list_files:
+        results = discover_graphml_files(
+            search_dirs=search_dirs,
+            algo=args.algo,
+            line=line,
+        )
+        print_graphml_list(results, search_dirs)
+        sys.exit(0)
+
+    # ── 确定 graphml_path ─────────────────────────────────────────────────────
+    graphml_path = args.graphml_path
+
+    if graphml_path is None:
+        # 未直接指定文件，通过 --algo / --line 自动定位
+        if args.algo is None and line is None:
+            print(
+                "[错误] 请提供 graphml_path 位置参数，或使用 --algo/--line 自动定位文件。\n"
+                "       使用 --list 查看所有可用 GraphML 文件。"
+            )
+            sys.exit(1)
+
+        results = discover_graphml_files(
+            search_dirs=search_dirs,
+            algo=args.algo,
+            line=line,
+        )
+
+        if not results:
+            algo_hint = f" 算法='{args.algo}'" if args.algo else ""
+            line_hint = f" 产线='{line}'" if line else ""
+            print(
+                f"[错误] 未找到匹配的 GraphML 文件（{algo_hint}{line_hint}）。\n"
+                f"       搜索目录: {search_dirs}\n"
+                f"       请先运行因果发现脚本，或使用 --search-dir 扩展搜索范围。\n"
+                f"       使用 --list 查看所有已发现的文件。"
+            )
+            sys.exit(1)
+
+        if len(results) > 1:
+            print(
+                f"[警告] 找到 {len(results)} 个匹配文件，自动选择第一个。"
+                f" 使用 --list 查看完整列表，或直接指定 graphml_path 消除歧义。"
+            )
+            for item in results:
+                print(f"         {item['filename']}  ({item['dir']})")
+
+        graphml_path = results[0]["path"]
+
+        # 如果未指定 --line，尝试从文件名中推断
+        if line is None:
+            line = results[0]["line"]
+            if line == "?":
+                print(
+                    "[错误] 无法从文件名推断产线，请使用 --line xin1/xin2 指定。"
+                )
+                sys.exit(1)
+            print(f"[信息] 自动推断产线: {line}（来自文件名 {results[0]['filename']}）")
+
+        print(f"[信息] 自动定位 GraphML 文件: {graphml_path}")
+
+    # ── 验证 graphml_path ─────────────────────────────────────────────────────
     if not os.path.exists(graphml_path):
         print(f"[错误] GraphML 文件不存在: {graphml_path}")
         sys.exit(1)
 
     graphml_path = os.path.abspath(graphml_path)
+
+    # ── line 必须已确定 ───────────────────────────────────────────────────────
+    if line is None:
+        # 尝试从文件名推断
+        fname_stem = os.path.splitext(os.path.basename(graphml_path))[0]
+        for ln in ("xin1", "xin2"):
+            if ln in fname_stem:
+                line = ln
+                print(f"[信息] 从文件名推断产线: {line}")
+                break
+        if line is None:
+            print(
+                "[错误] 无法确定产线，请使用 --line xin1/xin2 指定。\n"
+                "       xin1=新1#浮选产线(Group A+C)，xin2=新2#浮选产线(Group B+C)"
+            )
+            sys.exit(1)
+
+    var_csv = args.var_csv or _find_default_var_csv()
+    output_dir = args.output_dir
+    y_node_override = args.y_node
 
     # 确定输出目录
     if output_dir is None:
@@ -724,7 +1011,7 @@ def main():
 
     if verbose:
         print("=" * 80)
-        print("DAG 因果角色解析脚本 v4.2（双产线支持）")
+        print("DAG 因果角色解析脚本 v4.3（来源文件选择 + 双产线支持）")
         print("=" * 80)
         print(f"GraphML 文件: {graphml_path}")
         print(f"变量元数据 CSV: {var_csv}")
