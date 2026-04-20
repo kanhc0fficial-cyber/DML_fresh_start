@@ -4,20 +4,12 @@ run_monte_carlo_benchmark.py  [修正版]
 蒙特卡洛模拟 - 因果发现算法鲁棒性压力测试
 
 修正清单（相对于原始版本）：
-  [B1] BiAttnCUTSNet.forward: x.reshape(B*d,T,1) → 先 transpose 再 contiguous().reshape，
-       消除跨节点/时间步的内存交叉污染
-  [B2] BiAttnCUTSNet: tau 无正值约束 → 所有使用处改用 F.softplus(self.tau) 保证 τ > 0，
-       防止 sigmoid 方向反转
-  [B3] train_biattn_cuts: 缺少 NOTEARS 无环约束 → 在模型中加入 notears_penalty()
-       并在训练损失中加入 0.5 * h² 惩罚
-  [B4] _compute_mb_mask: Pearson 相关对非线性无效 → 改用 Spearman 秩相关，
-       能正确捕捉单调非线性因果关系
   [B5] run_monte_carlo_benchmark: 50次循环无显存清理 → 每次实验后调用
        torch.cuda.empty_cache() 和 gc.collect() 防止 OOM
   [B6] MultiScaleNTSNet.alpha 初始化: ones/n → zeros，梯度空间更干净
 
 实验设计:
-  - 50 次独立实验，每次生成不同的随机 DAG（20 节点）
+  - N 次独立实验（默认50次，可通过 --n_experiments 控制），每次生成不同的随机 DAG（20 节点）
   - 支持 ER 和 Scale-Free 两种图模型
   - 混合线性/正弦/指数/多项式非线性关系
   - 计算 SHD、TPR、FDR、Precision、Recall、F1
@@ -29,9 +21,7 @@ run_monte_carlo_benchmark.py  [修正版]
   - Coupled (TCDF → CUTS+ → NTS-NOTEARS 三阶段耦合)
 
 新增创新方案:
-  - BiAttn-CUTS   [方案一] Transformer注意力编码器 + 可学习软阈值邻接矩阵 + NOTEARS约束
   - MultiScale-NTS [方案二] 多尺度并行卷积特征融合 + 共享NOTEARS约束
-  - MB-CUTS        [方案三] 马尔可夫毯相关性预筛选(Spearman) + NTS-NOTEARS精化
 
 学术意义:
   这是 NeurIPS/ICLR 等顶会标准的因果发现算法评估范式
@@ -48,7 +38,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from scipy.stats import spearmanr          # [B4] Spearman 秩相关
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
@@ -141,129 +130,6 @@ class NTS_NOTEARSNet(nn.Module):
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 创新方案一：BiAttn-CUTS  [修正版]
-# ═══════════════════════════════════════════════════════════════════════════
-class BiAttnCUTSNet(nn.Module):
-    """
-    Transformer注意力编码器 + 可学习温度软阈值邻接矩阵 + NOTEARS无环约束
-
-    修正点：
-      [B1] forward 中的张量重塑：先 transpose(1,2).contiguous() 再 reshape，
-           保证每个 (B*d, T, 1) 样本对应单一节点的完整时间序列。
-      [B2] tau 正值约束：所有使用 tau 的地方改用 F.softplus(self.tau)，
-           防止 tau 优化为负数时 sigmoid 逻辑反转。
-      [B3] 新增 notears_penalty()，补回 DAG 无环约束。
-    """
-    def __init__(self, d, n_heads: int = 4, d_model: int = 16):
-        super().__init__()
-        self.d = d
-        self.d_model = d_model
-        self.W = nn.Parameter(torch.empty(d, d).uniform_(-0.05, 0.05))
-        # [B2] tau 初始化为 0，经 softplus 后自然 > 0（softplus(0) ≈ 0.693）
-        self.tau = nn.Parameter(torch.zeros(1))
-
-        self.input_proj = nn.Linear(1, d_model)
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model,
-            nhead=n_heads,       # d_model=16, nhead=4 → head_dim=4 ✓
-            dim_feedforward=32,
-            dropout=0.0,
-            batch_first=True
-        )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=1)
-        self.out_proj = nn.Linear(d_model, 1)
-
-    def _tau_pos(self):
-        """[B2] 保证温度系数恒正"""
-        return F.softplus(self.tau)
-
-    def forward(self, x):
-        """
-        参数:
-            x: (B, WINDOW_SIZE, d)
-        返回:
-            pred: (B, d)
-        """
-        B, T, d = x.shape
-
-        # [B1] 修正：先 transpose → (B, d, T)，再 contiguous().reshape → (B·d, T, 1)
-        # 保证第 k 个"伪样本"对应第 k//B 个节点、第 k%B 个批次的完整时序
-        x_flat = x.transpose(1, 2).contiguous().reshape(B * d, T, 1)  # (B·d, T, 1)
-        x_emb  = self.input_proj(x_flat)                               # (B·d, T, d_model)
-        h      = self.transformer(x_emb)                               # (B·d, T, d_model)
-        h_last = h[:, -1, :]                                           # (B·d, d_model)
-        node_feats = h_last.reshape(B, d, self.d_model)                # (B, d, d_model)
-
-        # [B2] 使用 softplus 保证 tau > 0
-        tau_pos = self._tau_pos()
-        W_soft  = torch.sigmoid(self.W * tau_pos)
-        W_soft  = W_soft * (1 - torch.eye(d, device=W_soft.device))   # 去自环
-
-        agg  = torch.einsum('ij,bif->bjf', W_soft, node_feats)        # (B, d, d_model)
-        pred = self.out_proj(agg).squeeze(-1)                          # (B, d)
-        return pred
-
-    def notears_penalty(self):
-        """[B3] 补回 NOTEARS 无环约束（施加在原始 W² 上，与基线保持一致）"""
-        M = self.W * self.W
-        E = torch.matrix_exp(M)
-        return torch.trace(E) - self.d
-
-
-def train_biattn_cuts(X: np.ndarray, verbose: bool = False) -> np.ndarray:
-    """
-    训练创新方案一：BiAttn-CUTS [修正版]
-
-    修正点：
-      [B2] sparse 正则使用 softplus(tau) 版本的 W_soft
-      [B3] 损失中加入 NOTEARS 惩罚 0.5 * h²
-    """
-    d = X.shape[1]
-    X_norm = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
-    wx, wy = build_windows(X_norm)
-
-    model = BiAttnCUTSNet(d).to(DEVICE)
-    opt   = optim.Adam(model.parameters(), lr=LR)
-
-    xb = torch.tensor(wx, dtype=torch.float32).to(DEVICE)
-    yb = torch.tensor(wy, dtype=torch.float32).to(DEVICE)
-    loader = torch.utils.data.DataLoader(
-        torch.utils.data.TensorDataset(xb, yb),
-        batch_size=BATCH_SIZE, shuffle=True
-    )
-
-    for epoch in range(EPOCHS):
-        total_loss = 0.0
-        for b_x, b_y in loader:
-            opt.zero_grad()
-            pred = model(b_x)
-            mse  = F.mse_loss(pred, b_y)
-
-            # [B2] 使用模型内的 _tau_pos() 保证一致性
-            tau_pos = model._tau_pos()
-            W_soft  = torch.sigmoid(model.W * tau_pos)
-            sparse  = torch.sum(W_soft * (1 - torch.eye(d, device=W_soft.device)))
-
-            # [B3] 补回 NOTEARS 无环惩罚
-            h_val = model.notears_penalty()
-
-            loss = mse + 0.01 * sparse + 0.5 * h_val * h_val
-            loss.backward()
-            opt.step()
-            total_loss += loss.item()
-
-        if verbose and (epoch + 1) % 10 == 0:
-            print(f"  [BiAttn-CUTS] Epoch {epoch+1}/{EPOCHS} - Loss: {total_loss/len(loader):.4f}")
-
-    # [B2] 输出时同样使用 softplus(tau)
-    with torch.no_grad():
-        tau_pos  = model._tau_pos()
-        adj_pred = torch.sigmoid(model.W * tau_pos).cpu().numpy()
-    np.fill_diagonal(adj_pred, 0)
-    return adj_pred
-
-
-# ═══════════════════════════════════════════════════════════════════════════
 # 创新方案二：MultiScale-NTS  [修正版]
 # ═══════════════════════════════════════════════════════════════════════════
 class MultiScaleNTSNet(nn.Module):
@@ -347,144 +213,6 @@ def train_multiscale_nts(X: np.ndarray, verbose: bool = False) -> np.ndarray:
                   f"Loss: {total_loss/len(loader):.4f} | α={alpha_disp}")
 
     adj_pred = model.W.detach().cpu().numpy()
-    return adj_pred
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-# 创新方案三：MB-CUTS  [修正版]
-# ═══════════════════════════════════════════════════════════════════════════
-def _compute_mb_mask(X_norm: np.ndarray, keep_ratio: float = 0.5) -> np.ndarray:
-    """
-    基于 Spearman 秩相关计算近似马尔可夫毯掩码  [修正版 B4]
-
-    修正原因：
-      原版使用 Pearson 相关系数，仅能捕捉线性关系。
-      当 USE_INDUSTRIAL_FUNCTIONS=True 时，数据含有饱和/阈值/倒U型等非线性函数，
-      Pearson 会将强非线性因果边误判为弱相关进而剪除，导致 Stage 1 误剪真实边。
-      Spearman 秩相关等价于对排名做 Pearson，能正确捕捉单调非线性关系，
-      计算成本与 Pearson 相当，无需引入额外依赖。
-
-    局限性说明：
-      Spearman 对于非单调关系（如倒 U 型、正弦）仍可能给出接近 0 的相关值。
-      若需完全非参数筛选，可替换为距离相关系数（`dcor` 库）或互信息近似。
-      此处优先保证与 scipy 的零额外依赖，建议在论文局限性章节中明确声明。
-
-    参数:
-        X_norm : 标准化数据 (n_samples, d)
-        keep_ratio : 每列保留的候选父节点比例（默认 50%）
-
-    返回:
-        mb_mask : (d, d) 二值候选边掩码
-    """
-    d = X_norm.shape[1]
-
-    # [B4] 使用 Spearman 秩相关替换 Pearson
-    # spearmanr 返回 (相关系数矩阵, p 值矩阵)，取 [0] 即相关矩阵
-    corr_matrix, _ = spearmanr(X_norm)
-    corr = np.array(corr_matrix)       # 确保是 ndarray，防止标量退化
-
-    # 若 d=1 时 spearmanr 返回标量，做保护
-    if corr.ndim == 0:
-        corr = np.array([[1.0]])
-    np.fill_diagonal(corr, 0.0)        # 排除自相关
-
-    mb_mask = np.zeros((d, d), dtype=np.float32)
-    k = max(1, int(np.ceil(d * keep_ratio)))
-
-    for j in range(d):
-        col     = np.abs(corr[:, j])
-        top_idx = np.argsort(col)[-k:]
-        mb_mask[top_idx, j] = 1.0
-
-    return mb_mask
-
-
-def train_mb_cuts(X: np.ndarray, verbose: bool = False) -> np.ndarray:
-    """
-    训练创新方案三：MB-CUTS（三阶段混合因果发现）[修正版]
-
-    修正点：
-      [B4] Stage 1 改用 Spearman 秩相关筛选候选边，适应非线性数据
-    """
-    d = X.shape[1]
-    X_norm = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-8)
-    wx, wy = build_windows(X_norm)
-
-    xb = torch.tensor(wx, dtype=torch.float32).to(DEVICE)
-    yb = torch.tensor(wy, dtype=torch.float32).to(DEVICE)
-    loader = torch.utils.data.DataLoader(
-        torch.utils.data.TensorDataset(xb, yb),
-        batch_size=BATCH_SIZE, shuffle=True
-    )
-
-    # ── Stage 1：马尔可夫毯相关性筛选（Spearman） ─────────────────────────
-    if verbose:
-        print("  [MB-CUTS] Stage 1: 马尔可夫毯候选边筛选（Spearman秩相关）...")
-
-    mb_mask   = _compute_mb_mask(X_norm, keep_ratio=0.5)
-    mb_mask_t = torch.tensor(mb_mask, dtype=torch.float32).to(DEVICE)
-    non_mb_t  = torch.tensor(1.0 - mb_mask, dtype=torch.float32).to(DEVICE)
-
-    if verbose:
-        n_cand = int(mb_mask.sum())
-        print(f"    候选边数量: {n_cand} / {d*d-d} （稀疏度 {n_cand/(d*d-d)*100:.1f}%）")
-
-    # ── Stage 2：CUTS+ 风格预热训练 ────────────────────────────────────────
-    if verbose:
-        print("  [MB-CUTS] Stage 2: 候选图内 CUTS+ 预热...")
-
-    model_rough = CUTSPlusNet(d).to(DEVICE)
-    opt_rough   = optim.Adam(model_rough.parameters(), lr=LR)
-
-    for epoch in range(10):
-        for b_x, b_y in loader:
-            opt_rough.zero_grad()
-            pred     = model_rough(b_x)
-            W_in_mb  = model_rough.W * mb_mask_t
-            loss     = F.mse_loss(pred, b_y) + 0.01 * torch.sum(torch.abs(W_in_mb))
-            loss.backward()
-            opt_rough.step()
-
-    adj_rough = torch.abs(model_rough.W).detach().cpu().numpy() * mb_mask
-
-    if verbose:
-        nonzero_vals = adj_rough[adj_rough > 0]
-        mean_val = nonzero_vals.mean() if len(nonzero_vals) > 0 else 0.0
-        print(f"    预热完成，粗糙邻接矩阵均值: {mean_val:.4f}")
-
-    # ── Stage 3：NTS-NOTEARS 精化 + 图外惩罚项 ────────────────────────────
-    if verbose:
-        print("  [MB-CUTS] Stage 3: NOTEARS 精化 + 马尔可夫毯约束...")
-
-    model_fine = NTS_NOTEARSNet(d).to(DEVICE)
-    with torch.no_grad():
-        model_fine.W.data = torch.tensor(
-            adj_rough, dtype=torch.float32
-        ).to(DEVICE) * 0.1
-
-    opt_fine = optim.Adam(model_fine.parameters(), lr=LR)
-
-    for epoch in range(EPOCHS):
-        total_loss = 0.0
-        for b_x, b_y in loader:
-            opt_fine.zero_grad()
-            pred       = model_fine(b_x)
-            mse        = F.mse_loss(pred, b_y)
-            h_val      = model_fine.notears_penalty()
-            sparse     = torch.sum(torch.abs(model_fine.W))
-            mb_penalty = torch.sum(torch.abs(model_fine.W * non_mb_t))
-            loss       = mse + 0.001 * sparse + 0.5 * h_val * h_val + 1.0 * mb_penalty
-            loss.backward()
-            opt_fine.step()
-            total_loss += loss.item()
-
-        if verbose and (epoch + 1) % 10 == 0:
-            print(f"  [MB-CUTS] Epoch {epoch+1}/{EPOCHS} - Loss: {total_loss/len(loader):.4f}")
-
-    if verbose:
-        print("  [MB-CUTS] 三阶段完成")
-
-    adj_pred = model_fine.W.detach().cpu().numpy()
     return adj_pred
 
 
@@ -668,18 +396,14 @@ ALGORITHM_REGISTRY = {
     "cuts_plus":      train_cuts_plus,
     "nts_notears":    train_nts_notears,
     "coupled":        train_coupled,
-    "biattn_cuts":    train_biattn_cuts,
     "multiscale_nts": train_multiscale_nts,
-    "mb_cuts":        train_mb_cuts,
 }
 
 ALGORITHM_CN_NAME = {
     "cuts_plus":      "CUTS+（基线）",
     "nts_notears":    "NTS-NOTEARS（基线）",
     "coupled":        "Coupled-三阶段（基线）",
-    "biattn_cuts":    "BiAttn-CUTS（方案一：Transformer换头）",
     "multiscale_nts": "MultiScale-NTS（方案二：多尺度卷积）",
-    "mb_cuts":        "MB-CUTS（方案三：马尔可夫毯混合）",
 }
 
 
@@ -824,18 +548,6 @@ def generate_markdown_report(algorithm: str, df_results: pd.DataFrame, stats: di
     cn_name = ALGORITHM_CN_NAME.get(algorithm, algorithm)
 
     innovation_note = {
-        "biattn_cuts": """
-## 创新方案说明
-
-**BiAttn-CUTS（方案一：Transformer注意力换头）**
-
-- **核心改动**：将 CUTS+ 中的 LSTM 编码器替换为 TransformerEncoder，
-  引入可学习温度参数 τ（经 Softplus 约束为正）对邻接矩阵做软阈值化，
-  并补充 NOTEARS 无环约束。
-- **学术依据**：Transformer 自注意力机制可同时建模窗口内任意时刻对的依赖，
-  克服 LSTM 梯度传播随距离衰减的局限性。
-- **适用场景**：工业传感器数据中存在长程、多时滞因果关系时。
-""",
         "multiscale_nts": """
 ## 创新方案说明
 
@@ -845,17 +557,6 @@ def generate_markdown_report(algorithm: str, df_results: pd.DataFrame, stats: di
   （Softmax归一化，zeros初始化）自适应加权，共享单一 NOTEARS DAG 约束。
 - **学术依据**：多尺度时序卷积在工业动态建模中已被广泛验证，
   引入因果图学习框架属于跨领域组合创新。
-""",
-        "mb_cuts": """
-## 创新方案说明
-
-**MB-CUTS（方案三：马尔可夫毯预筛选 + NTS-NOTEARS精化）**
-
-- **核心改动**：三阶段混合框架。Stage 1 用 **Spearman 秩相关**（替换原 Pearson）
-  生成候选边掩码，能正确处理单调非线性数据；Stage 2 CUTS+ 快速预热；
-  Stage 3 NTS-NOTEARS + 图外惩罚精化。
-- **局限性说明**：Spearman 对非单调关系（如倒U型）仍有局限，
-  完全非参数方案可替换为距离相关系数（dcor库）或互信息近似。
 """,
     }.get(algorithm, "")
 
@@ -969,7 +670,7 @@ if __name__ == "__main__":
     import argparse
 
     ALL_BASELINES   = ["cuts_plus", "nts_notears", "coupled"]
-    ALL_INNOVATIONS = ["biattn_cuts", "multiscale_nts", "mb_cuts"]
+    ALL_INNOVATIONS = ["multiscale_nts"]
     ALL_ALGORITHMS  = ALL_BASELINES + ALL_INNOVATIONS
 
     parser = argparse.ArgumentParser(
