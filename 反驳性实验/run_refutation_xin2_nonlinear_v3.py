@@ -580,8 +580,10 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
 
         # ── R-Learner theta（非线性估计）───────────────────────────
         eps       = 1e-8
-        W_pseudo  = res_Y / (res_D + eps * np.sign(res_D + eps))
-        w_weights = res_D ** 2
+        # 安全除法：对绝对值过小的 res_D 用 eps 替换，防止除零
+        safe_res_D = np.where(np.abs(res_D) < eps, eps, res_D)
+        W_pseudo   = res_Y / safe_res_D
+        w_weights  = res_D ** 2
 
         # 权重归一化（防止 GBM 数值问题）
         w_sum = w_weights.sum()
