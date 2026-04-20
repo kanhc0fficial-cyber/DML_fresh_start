@@ -1,0 +1,63 @@
+{
+  "description": "朴素回归方法 vs DML 对比（展示交叉拟合去偏优势）",
+  "conclusion": "DML 通过交叉拟合消除正则化偏差，相比朴素方法具有更低偏差和更准确的覆盖率",
+  "n_experiments": 5,
+  "n_samples": 500,
+  "noise_type": "gaussian",
+  "noise_scale": 0.3,
+  "graph_type": "layered",
+  "ate_true": -0.265453,
+  "best_bias": "DML-RF (Cross-Fitting)",
+  "best_rmse": "OLS with Controls",
+  "best_coverage": "Naive Regression",
+  "results": [
+    {
+      "method": "Naive Regression",
+      "tag": "NaiveOLS",
+      "category": "Naive (No DML)",
+      "mean_bias": -0.025656,
+      "abs_bias": 0.025656,
+      "rmse": 0.055807,
+      "coverage_95": 0.8,
+      "mean_se": 0.03861,
+      "bias_p_value": 0.247,
+      "n_experiments": 5
+    },
+    {
+      "method": "Partialling-Out (No CF)",
+      "tag": "PartialNoCF",
+      "category": "Naive (No DML)",
+      "mean_bias": -0.015329,
+      "abs_bias": 0.015329,
+      "rmse": 0.062569,
+      "coverage_95": 0.8,
+      "mean_se": 0.04307,
+      "bias_p_value": 0.572,
+      "n_experiments": 5
+    },
+    {
+      "method": "OLS with Controls",
+      "tag": "OLS_Ctrl",
+      "category": "Naive (No DML)",
+      "mean_bias": -0.008182,
+      "abs_bias": 0.008182,
+      "rmse": 0.055355,
+      "coverage_95": 0.8,
+      "mean_se": 0.042541,
+      "bias_p_value": 0.7382,
+      "n_experiments": 5
+    },
+    {
+      "method": "DML-RF (Cross-Fitting)",
+      "tag": "DML_RF",
+      "category": "DML",
+      "mean_bias": -0.00769,
+      "abs_bias": 0.00769,
+      "rmse": 0.062171,
+      "coverage_95": 0.8,
+      "mean_se": 0.043355,
+      "bias_p_value": 0.7804,
+      "n_experiments": 5
+    }
+  ]
+}
