@@ -116,13 +116,13 @@ if TORCH_AVAILABLE:
             self.shared = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim // 2),
                 nn.LayerNorm(hidden_dim // 2),
-                nn.ReLU(),
+                nn.SiLU(),
             )
             self.proj_causal = nn.Linear(hidden_dim // 2, latent_dim_causal)
             self.fc_mu_recon = nn.Linear(hidden_dim // 2, latent_dim_recon)
@@ -157,9 +157,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim // 2),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim // 2, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
 
@@ -172,9 +172,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, 1),
             )
 
@@ -278,6 +278,12 @@ if TORCH_AVAILABLE:
                             loss_causal.backward(retain_graph=True)
                             g_causal = {n: shared_params_dict[n].grad.clone() if shared_params_dict[n].grad is not None
                                         else torch.zeros_like(shared_params_dict[n]) for n in shared_param_names}
+                            # 保存因果头和投影层的梯度（它们不参与重建损失的计算图）
+                            causal_only_params = (list(self.head_Y.parameters())
+                                                  + list(self.head_D.parameters())
+                                                  + list(self.encoder.proj_causal.parameters()))
+                            g_causal_only = [p.grad.clone() if p.grad is not None
+                                             else torch.zeros_like(p) for p in causal_only_params]
                             optimizer.zero_grad()
                             loss_recon_full.backward()
                             for name in shared_param_names:
@@ -288,8 +294,12 @@ if TORCH_AVAILABLE:
                                 if dot < 0:
                                     g_r = g_r - (dot / ((g_c ** 2).sum() + 1e-12)) * g_c
                                 p.grad = g_c + alpha * g_r
-                            for p in list(self.head_Y.parameters()) + list(self.head_D.parameters()):
-                                if p.grad is None: p.grad = torch.zeros_like(p)
+                            # 恢复因果头和投影层的梯度
+                            for p, g in zip(causal_only_params, g_causal_only):
+                                if p.grad is not None:
+                                    p.grad = p.grad + g
+                                else:
+                                    p.grad = g
                             nn.utils.clip_grad_norm_(all_params, GRAD_CLIP); optimizer.step()
                         else:
                             loss = loss_causal + alpha * loss_recon_full
@@ -361,6 +371,26 @@ def _generate_standard_folds(n, n_folds, seed):
     return list(kf.split(np.arange(n)))
 
 
+def _generate_valid_folds(n, n_folds, D_normed, seed, jitter_ratio=0.0,
+                          max_retries=100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏"""
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    return _generate_standard_folds(n, n_folds, seed)
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  v5 DML 估计器（高维版）
 # ═══════════════════════════════════════════════════════════════════
@@ -387,14 +417,9 @@ def v5_highdim_dml_estimate(Y, D, X_ctrl, seed=42, n_folds=5, n_repeats=5,
         res_Y_all = np.full(n, np.nan)
         res_D_all = np.full(n, np.nan)
         weights_all = np.full(n, np.nan)
-        if fold_jitter_ratio > 0:
-            folds = _generate_jittered_folds(n, n_folds, seed=seed_b, jitter_ratio=fold_jitter_ratio)
-        else:
-            folds = _generate_standard_folds(n, n_folds, seed=seed_b)
-        d_median = np.median(D_normed)
+        folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                      jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
         for train_idx, test_idx in folds:
-            n_high = np.sum(D_normed[train_idx] > d_median)
-            if n_high < MIN_TREAT_SAMPLES: continue
             X_tr, X_te = X_normed[train_idx], X_normed[test_idx]
             Y_tr, Y_te = Y_normed[train_idx], Y_normed[test_idx]
             D_tr, D_te = D_normed[train_idx], D_normed[test_idx]

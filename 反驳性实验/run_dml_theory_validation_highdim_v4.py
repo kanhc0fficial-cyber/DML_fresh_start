@@ -278,6 +278,27 @@ def _generate_standard_folds(n, n_folds, seed):
     return list(kf.split(np.arange(n)))
 
 
+def _generate_valid_folds(n, n_folds, D_normed, seed, jitter_ratio=0.0,
+                          max_retries=100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏"""
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    # 回退到标准划分
+    return _generate_standard_folds(n, n_folds, seed)
+
+
 def _nested_lr_search(X_train, Y_train, D_train, seed=42, input_dim=None):
     """嵌套学习率搜索"""
     if input_dim is None:
@@ -285,8 +306,11 @@ def _nested_lr_search(X_train, Y_train, D_train, seed=42, input_dim=None):
     n_train = len(Y_train)
     n_inner_val = max(10, int(n_train * NESTED_INNER_RATIO))
     n_inner_train = n_train - n_inner_val
-    X_it, Y_it, D_it = X_train[:n_inner_train], Y_train[:n_inner_train], D_train[:n_inner_train]
-    X_iv, Y_iv, D_iv = X_train[n_inner_train:], Y_train[n_inner_train:], D_train[n_inner_train:]
+    # 随机打乱后再切分，避免顺序索引导致的分布偏移
+    perm = np.random.RandomState(seed).permutation(n_train)
+    X_shuffled, Y_shuffled, D_shuffled = X_train[perm], Y_train[perm], D_train[perm]
+    X_it, Y_it, D_it = X_shuffled[:n_inner_train], Y_shuffled[:n_inner_train], D_shuffled[:n_inner_train]
+    X_iv, Y_iv, D_iv = X_shuffled[n_inner_train:], Y_shuffled[n_inner_train:], D_shuffled[n_inner_train:]
     best_lr, best_loss = NESTED_LR_CANDIDATES[0], float('inf')
     for lr_cand in NESTED_LR_CANDIDATES:
         try:
@@ -334,17 +358,15 @@ def v4_highdim_dml_estimate(Y, D, X_ctrl, seed=42, n_folds=5, n_repeats=5,
         np.random.seed(seed_b)
         res_Y_all = np.full(n, np.nan)
         res_D_all = np.full(n, np.nan)
-        if fold_jitter_ratio > 0:
+        if use_stratified:
+            folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                          jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
+        elif fold_jitter_ratio > 0:
             folds = _generate_jittered_folds(n, n_folds, seed=seed_b,
                                              jitter_ratio=fold_jitter_ratio)
         else:
             folds = _generate_standard_folds(n, n_folds, seed=seed_b)
-        d_median = np.median(D_normed)
         for train_idx, test_idx in folds:
-            if use_stratified:
-                n_high = np.sum(D_normed[train_idx] > d_median)
-                if n_high < MIN_TREAT_SAMPLES:
-                    continue
             X_train, X_test = X_normed[train_idx], X_normed[test_idx]
             Y_train, Y_test = Y_normed[train_idx], Y_normed[test_idx]
             D_train, D_test = D_normed[train_idx], D_normed[test_idx]
@@ -519,7 +541,6 @@ def run_cf_compare(args):
     ate_true = dvch.compute_ate_for_dag_highdim(dag_info, args.noise_scale, args.noise_type)
     print(f"  真实 ATE = {ate_true:.6f}")
 
-    from synthetic_dag_generator_highdim import HighDimSyntheticDAGGenerator
     strategies = {
         "A_标准固定折边": _strategy_a,
         "B_分层折检查": _strategy_b,

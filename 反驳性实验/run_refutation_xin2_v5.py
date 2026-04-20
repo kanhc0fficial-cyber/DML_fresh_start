@@ -942,12 +942,13 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             np.random.seed((base_seed * 100 + k) % (2**31))
 
             # 分层折检查（继承 v4）
+            # 注意：不跳过折（skip 会导致测试样本遗漏 → 选择性偏差），
+            # 仅记录不平衡折数量用于诊断。
             if use_stratified:
                 D_fold_train = D_raw_seq[:train_end]
                 high_treat_count = int(np.sum(D_fold_train > d_global_median))
                 if high_treat_count < MIN_TREAT_SAMPLES:
                     folds_skipped_stratified += 1
-                    continue
 
             # 窗口类型（继承 v4）
             if window_type == "sliding":
@@ -1068,12 +1069,12 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
         f_list.append(f_stat)
         n_list.append(n)
 
-    # 分层跳过率日志
+    # 分层不平衡日志
     if use_stratified and folds_skipped_stratified > 0:
-        skip_rate = folds_skipped_stratified / max(1, folds_total)
-        if skip_rate > 0.5:
+        imbalance_rate = folds_skipped_stratified / max(1, folds_total)
+        if imbalance_rate > 0.5:
             print(f"  [分层警告] {op}: {folds_skipped_stratified}/{folds_total} 个折"
-                  f"因处理样本不足被跳过（跳过率 {skip_rate:.1%}）")
+                  f"处理样本不足（不平衡率 {imbalance_rate:.1%}，仍保留训练）")
 
     # ── Bootstrap 聚合 ──────────────────────────────────────────────
     min_success = max(1, n_bootstrap // 2)

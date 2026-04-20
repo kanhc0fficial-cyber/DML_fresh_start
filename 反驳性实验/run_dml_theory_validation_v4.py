@@ -419,6 +419,42 @@ def _generate_standard_folds(n: int, n_folds: int, seed: int):
     return list(kf.split(indices))
 
 
+def _generate_valid_folds(n: int, n_folds: int, D_normed: np.ndarray,
+                          seed: int, jitter_ratio: float = 0.0,
+                          max_retries: int = 100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏。
+
+    重试不同随机种子直到所有折的训练集都满足最低高处理量样本要求。
+
+    参数:
+        n:             样本总数
+        n_folds:       折数
+        D_normed:      标准化后的处理变量
+        seed:          基础随机种子
+        jitter_ratio:  折边抖动比例
+        max_retries:   最大重试次数
+
+    返回:
+        list of (train_idx, test_idx) 元组
+    """
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    # 回退到标准划分
+    return _generate_standard_folds(n, n_folds, seed)
+
+
 def _nested_lr_search(X_train: np.ndarray, Y_train: np.ndarray,
                       D_train: np.ndarray, seed: int = 42,
                       input_dim: int = None,
@@ -450,13 +486,18 @@ def _nested_lr_search(X_train: np.ndarray, Y_train: np.ndarray,
     n_inner_val = max(10, int(n_train * NESTED_INNER_RATIO))
     n_inner_train = n_train - n_inner_val
 
-    # 分割内层训练/验证集
-    X_inner_train = X_train[:n_inner_train]
-    Y_inner_train = Y_train[:n_inner_train]
-    D_inner_train = D_train[:n_inner_train]
-    X_inner_val = X_train[n_inner_train:]
-    Y_inner_val = Y_train[n_inner_train:]
-    D_inner_val = D_train[n_inner_train:]
+    # 随机打乱后再切分，避免顺序索引导致的分布偏移
+    perm = np.random.RandomState(seed).permutation(n_train)
+    X_shuffled = X_train[perm]
+    Y_shuffled = Y_train[perm]
+    D_shuffled = D_train[perm]
+
+    X_inner_train = X_shuffled[:n_inner_train]
+    Y_inner_train = Y_shuffled[:n_inner_train]
+    D_inner_train = D_shuffled[:n_inner_train]
+    X_inner_val = X_shuffled[n_inner_train:]
+    Y_inner_val = Y_shuffled[n_inner_train:]
+    D_inner_val = D_shuffled[n_inner_train:]
 
     best_lr = lr_candidates[0]
     best_loss = float('inf')
@@ -549,22 +590,17 @@ def v4_dml_estimate(Y: np.ndarray, D: np.ndarray, X_ctrl: np.ndarray,
         res_Y_all = np.full(n, np.nan)
         res_D_all = np.full(n, np.nan)
 
-        # 改进1：折边随机化 vs 标准分折
-        if fold_jitter_ratio > 0:
+        # 改进1+2：折边随机化 + 分层检查（通过 _generate_valid_folds 保证所有折可用）
+        if use_stratified:
+            folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                          jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
+        elif fold_jitter_ratio > 0:
             folds = _generate_jittered_folds(n, n_folds, seed=seed_b,
                                              jitter_ratio=fold_jitter_ratio)
         else:
             folds = _generate_standard_folds(n, n_folds, seed=seed_b)
 
-        # 计算 D 中位数（用于分层检查）
-        d_median = np.median(D_normed)
-
         for train_idx, test_idx in folds:
-            # 改进2：分层检查
-            if use_stratified:
-                n_high = np.sum(D_normed[train_idx] > d_median)
-                if n_high < MIN_TREAT_SAMPLES:
-                    continue  # 跳过高处理量样本不足的折
 
             X_train = X_normed[train_idx]
             X_test = X_normed[test_idx]

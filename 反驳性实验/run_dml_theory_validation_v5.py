@@ -159,10 +159,10 @@ if TORCH_AVAILABLE:
             self.shared = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
                 nn.LayerNorm(hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
             )
 
             # 因果流：h → z_causal（确定性投影）
@@ -221,9 +221,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, output_dim),
             )
 
@@ -238,9 +238,9 @@ if TORCH_AVAILABLE:
             super().__init__()
             self.net = nn.Sequential(
                 nn.Linear(latent_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
+                nn.SiLU(),
                 nn.Linear(hidden_dim, 1),
             )
 
@@ -424,39 +424,40 @@ if TORCH_AVAILABLE:
                                 else:
                                     g_causal[name] = torch.zeros_like(p)
 
+                            # 保存因果头和投影层的梯度（它们不参与重建损失的计算图）
+                            causal_only_params = (
+                                list(self.head_Y.parameters())
+                                + list(self.head_D.parameters())
+                                + list(self.encoder.proj_causal.parameters())
+                            )
+                            g_causal_only = [
+                                p.grad.clone() if p.grad is not None
+                                else torch.zeros_like(p) for p in causal_only_params
+                            ]
+
                             # Step 2: 计算重建损失梯度
                             optimizer.zero_grad()
                             loss_recon_full.backward()
-                            g_recon = {}
-                            for name in shared_param_names:
-                                p = shared_params_dict[name]
-                                if p.grad is not None:
-                                    g_recon[name] = p.grad.clone()
-                                else:
-                                    g_recon[name] = torch.zeros_like(p)
 
                             # Step 3: 投影冲突的重建梯度
                             for name in shared_param_names:
-                                dot_product = (g_causal[name] * g_recon[name]).sum()
+                                g_r = shared_params_dict[name].grad.clone() if shared_params_dict[name].grad is not None else torch.zeros_like(shared_params_dict[name])
+                                g_c = g_causal[name]
+                                dot_product = (g_c * g_r).sum()
                                 if dot_product < 0:
                                     # 冲突：投影 g_recon 到 g_causal 的正交补空间
-                                    norm_sq = (g_causal[name] ** 2).sum() + 1e-12
-                                    g_recon[name] = g_recon[name] - (dot_product / norm_sq) * g_causal[name]
+                                    norm_sq = (g_c ** 2).sum() + 1e-12
+                                    g_r = g_r - (dot_product / norm_sq) * g_c
 
                                 # 组合梯度并应用
-                                shared_params_dict[name].grad = g_causal[name] + alpha * g_recon[name]
+                                shared_params_dict[name].grad = g_c + alpha * g_r
 
-                            # 非共享参数保持原始梯度（因果头和解码器的梯度）
-                            # 因果头参数的梯度来自 loss_causal.backward(retain_graph=True)
-                            # 解码器参数的梯度来自 loss_recon_full.backward()
-                            # 这里需要重新计算非共享参数的梯度
-                            # 为简单起见，对非共享参数直接使用组合损失
-                            for name, param in self.head_Y.named_parameters():
-                                if param.grad is None:
-                                    param.grad = torch.zeros_like(param)
-                            for name, param in self.head_D.named_parameters():
-                                if param.grad is None:
-                                    param.grad = torch.zeros_like(param)
+                            # 恢复因果头和投影层的梯度
+                            for p, g in zip(causal_only_params, g_causal_only):
+                                if p.grad is not None:
+                                    p.grad = p.grad + g
+                                else:
+                                    p.grad = g
 
                             nn.utils.clip_grad_norm_(all_params, GRAD_CLIP)
                             optimizer.step()
@@ -582,7 +583,25 @@ def _generate_standard_folds(n: int, n_folds: int, seed: int):
     return list(kf.split(indices))
 
 
-# ═══════════════════════════════════════════════════════════════════
+def _generate_valid_folds(n: int, n_folds: int, D_normed: np.ndarray,
+                          seed: int, jitter_ratio: float = 0.0,
+                          max_retries: int = 100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏"""
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    return _generate_standard_folds(n, n_folds, seed)# ═══════════════════════════════════════════════════════════════════
 #  v5 DML 估计器（含全部四项微创新）
 # ═══════════════════════════════════════════════════════════════════
 
@@ -649,21 +668,11 @@ def v5_dml_estimate(Y: np.ndarray, D: np.ndarray, X_ctrl: np.ndarray,
         res_D_all = np.full(n, np.nan)
         weights_all = np.full(n, np.nan)
 
-        # 折边随机化（继承 v4）
-        if fold_jitter_ratio > 0:
-            folds = _generate_jittered_folds(n, n_folds, seed=seed_b,
-                                             jitter_ratio=fold_jitter_ratio)
-        else:
-            folds = _generate_standard_folds(n, n_folds, seed=seed_b)
-
-        # 分层检查阈值
-        d_median = np.median(D_normed)
+        # 折边随机化 + 分层检查（通过 _generate_valid_folds 保证所有折可用）
+        folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                      jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
 
         for train_idx, test_idx in folds:
-            # 分层检查（继承 v4）
-            n_high = np.sum(D_normed[train_idx] > d_median)
-            if n_high < MIN_TREAT_SAMPLES:
-                continue
 
             X_train = X_normed[train_idx]
             X_test = X_normed[test_idx]

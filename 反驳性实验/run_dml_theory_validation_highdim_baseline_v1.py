@@ -94,8 +94,7 @@ def run_quick(args):
     print(f"  混杂变量数: {len(dag_info['confounder_indices'])}")
 
     # 计算扩展后维度
-    from synthetic_dag_generator_highdim import compute_expanded_dim
-    exp_dim = compute_expanded_dim(len(dag_info['confounder_indices']))
+    exp_dim = dvch.compute_expanded_dim(len(dag_info['confounder_indices']))
     print(f"  扩展后特征维度: ~{exp_dim}")
 
     n_exp = min(args.n_experiments, 30)
