@@ -190,6 +190,23 @@ def _random_sample_param(name: str, spec: dict, rng: np.random.Generator):
         raise ValueError(f"未知参数类型: {spec['type']}")
 
 
+def _apply_param_constraints(params: dict) -> None:
+    """
+    对超参数字典应用合理性约束（原地修改）。
+
+    约束：
+      1. phase1_ratio + phase2_ratio <= 0.85（留至少 15% 给 phase3）
+      2. latent_dim_causal < latent_dim_recon（因果流应比重建流低维）
+    """
+    if "phase1_ratio" in params and "phase2_ratio" in params:
+        if params["phase1_ratio"] + params["phase2_ratio"] > 0.85:
+            params["phase2_ratio"] = 0.85 - params["phase1_ratio"]
+
+    if "latent_dim_causal" in params and "latent_dim_recon" in params:
+        if params["latent_dim_causal"] >= params["latent_dim_recon"]:
+            params["latent_dim_recon"] = params["latent_dim_causal"] + 8
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  模拟数据管线目标函数
 # ═══════════════════════════════════════════════════════════════════
@@ -516,32 +533,6 @@ def _run_optuna_tuning(
     # 静默 Optuna 日志
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    def _trial_objective(trial):
-        params = {}
-        for name, spec in search_space.items():
-            params[name] = _suggest_param(trial, name, spec)
-
-        # 约束：phase1 + phase2 <= 0.85（留至少 15% 给 phase3）
-        if "phase1_ratio" in params and "phase2_ratio" in params:
-            if params["phase1_ratio"] + params["phase2_ratio"] > 0.85:
-                # 缩减 phase2 使总和合理
-                params["phase2_ratio"] = 0.85 - params["phase1_ratio"]
-
-        # 约束：latent_dim_causal < latent_dim_recon
-        if ("latent_dim_causal" in params and "latent_dim_recon" in params):
-            if params["latent_dim_causal"] >= params["latent_dim_recon"]:
-                params["latent_dim_recon"] = params["latent_dim_causal"] + 8
-
-        result = objective_fn(params)
-        score = result["score"]
-
-        # 记录所有指标到 trial user_attrs
-        for key, val in result.items():
-            if key != "score":
-                trial.set_user_attr(key, val)
-
-        return score
-
     print(f"\n{'═' * 70}")
     print(f"  开始 Optuna 超参调优：{study_name}")
     print(f"  搜索方法: TPE 贝叶斯优化")
@@ -557,13 +548,7 @@ def _run_optuna_tuning(
         for name, spec in search_space.items():
             params[name] = _suggest_param(trial, name, spec)
 
-        # 约束
-        if "phase1_ratio" in params and "phase2_ratio" in params:
-            if params["phase1_ratio"] + params["phase2_ratio"] > 0.85:
-                params["phase2_ratio"] = 0.85 - params["phase1_ratio"]
-        if "latent_dim_causal" in params and "latent_dim_recon" in params:
-            if params["latent_dim_causal"] >= params["latent_dim_recon"]:
-                params["latent_dim_recon"] = params["latent_dim_causal"] + 8
+        _apply_param_constraints(params)
 
         t_trial_start = time.perf_counter()
         try:
@@ -639,13 +624,7 @@ def _run_random_search(
         for name, spec in search_space.items():
             params[name] = _random_sample_param(name, spec, rng)
 
-        # 约束
-        if "phase1_ratio" in params and "phase2_ratio" in params:
-            if params["phase1_ratio"] + params["phase2_ratio"] > 0.85:
-                params["phase2_ratio"] = 0.85 - params["phase1_ratio"]
-        if "latent_dim_causal" in params and "latent_dim_recon" in params:
-            if params["latent_dim_causal"] >= params["latent_dim_recon"]:
-                params["latent_dim_recon"] = params["latent_dim_causal"] + 8
+        _apply_param_constraints(params)
 
         t_trial_start = time.perf_counter()
         try:
@@ -1062,7 +1041,7 @@ def main():
             quick=args.quick,
             n_ops=args.n_ops,
             sample_size=args.sample_size,
-            operability_csv=getattr(args, "operability_csv", ""),
+            operability_csv=args.operability_csv,
             seed=args.seed,
         )
     elif args.pipeline == "both":
