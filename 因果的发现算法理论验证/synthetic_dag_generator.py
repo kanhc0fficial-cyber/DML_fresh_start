@@ -375,7 +375,8 @@ class SyntheticDAGGenerator:
         noise_scale: float = 0.1,
         noise_type: str = 'gaussian',
         add_time_lag: bool = False,
-        lag_order: int = 1
+        lag_order: int = 1,
+        do_interventions: Optional[Dict[int, np.ndarray]] = None
     ) -> np.ndarray:
         """
         根据 DAG 结构和边函数生成时序数据
@@ -388,6 +389,10 @@ class SyntheticDAGGenerator:
             noise_type: 噪声类型 ('gaussian', 'heteroscedastic', 'heavy_tail', 'periodic')
             add_time_lag: 是否添加时序依赖（自回归）
             lag_order: 自回归阶数
+            do_interventions: do-calculus 干预字典，格式 {node_idx: np.ndarray(n_samples,)}
+                当提供时，指定节点的值被强制设为给定值（忽略其父节点的因果作用），
+                但 RNG 调用序列保持不变，确保与未干预生成的噪声完全同步。
+                用于仿真 do(T=t) 计算真实因果效应。
             
         返回:
             X: (n_samples, n_nodes) 数据矩阵
@@ -438,10 +443,16 @@ class SyntheticDAGGenerator:
                     current_signal=current_signal
                 )
                 
-                # 组合并裁剪，防止数值爆炸
-                X[t, node] = np.clip(
-                    ar_term + causal_term + noise, -1e4, 1e4
-                )
+                # do-calculus 干预：强制设置节点值，忽略因果计算结果
+                # 注意：上面的 RNG 调用（randn / _generate_noise）仍然执行，
+                # 保证 RNG 序列与非干预生成完全同步
+                if do_interventions is not None and node in do_interventions:
+                    X[t, node] = do_interventions[node][t]
+                else:
+                    # 组合并裁剪，防止数值爆炸
+                    X[t, node] = np.clip(
+                        ar_term + causal_term + noise, -1e4, 1e4
+                    )
         
         # 最终安全检查：替换可能残留的 NaN/Inf
         if np.any(~np.isfinite(X)):
