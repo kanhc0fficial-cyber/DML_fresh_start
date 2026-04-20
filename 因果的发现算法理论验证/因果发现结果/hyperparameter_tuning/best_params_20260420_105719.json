@@ -1,0 +1,16 @@
+{
+  "window_size": 10,
+  "kernel_sizes": [
+    2,
+    4,
+    8,
+    10
+  ],
+  "hidden_mult": 8,
+  "lr": 0.005,
+  "epochs": 30,
+  "batch_size": 64,
+  "l1_lambda": 0.001,
+  "h_lambda": 0.5,
+  "threshold": 0.1
+}

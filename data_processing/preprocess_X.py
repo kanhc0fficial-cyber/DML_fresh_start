@@ -66,8 +66,7 @@ BASE_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 # 白名单来源目录（含两个 CSV，NAME 列合并）
 WHITELIST_DIR = BASE_DATA_DIR / "操作变量和混杂变量"
 WHITELIST_CSVS = [
-    WHITELIST_DIR / "output_MC_可用版.csv",
-    WHITELIST_DIR / "output_最终可用变量合集_无digital版.csv",
+    WHITELIST_DIR / "output_whitelist_active.csv",
 ]
 
 # 多批次数据目录（按时间顺序排列；格式：每目录下含 .xlsx，sheet=变量名，列含 time/value/quality）

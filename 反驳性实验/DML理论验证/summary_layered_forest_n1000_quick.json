@@ -1,0 +1,15 @@
+{
+  "n_experiments": 30,
+  "n_samples": 1000,
+  "graph_type": "layered",
+  "noise_type": "gaussian",
+  "ml_method": "forest",
+  "use_industrial": false,
+  "mean_bias": 0.043115,
+  "median_bias": 0.04657,
+  "rmse": 0.05328,
+  "coverage_95": 0.6,
+  "mean_se": 0.029346,
+  "bias_t_stat": 7.544,
+  "bias_p_value": 0.0
+}
