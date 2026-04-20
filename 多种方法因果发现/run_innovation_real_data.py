@@ -46,12 +46,21 @@ os.makedirs(OUT_DIR, exist_ok=True)
 # WINDOW_SIZE 与 run_tcdf_space_time_dag 保持一致（10min 采样 × 15 = 2.5h 窗口）
 WINDOW_SIZE = 15
 BATCH_SIZE = 32       # 真实数据节点数多，减小 batch 防显存溢出
-EPOCHS = 50           # 真实数据噪声大，多训练
+EPOCHS = 100          # 50→100：真实数据噪声大，多训练以充分收敛
 LR = 0.003
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# 邻接矩阵阈值
+# 邻接矩阵阈值（按算法分别设定）
+# 依据 run_monte_carlo_benchmark 基准实验：
+#   BiAttn-CUTS 输出 sigmoid(W·τ) ∈ (0,1)，0.05 导致 FDR≈0.879，应提高至 0.30
+#   MultiScale-NTS 输出原始权重，0.05 导致 TPR≈0.171，应降低至 0.03
+#   MB-CUTS 使用原始权重，保持 0.05 不变
 DEFAULT_THRESHOLD = 0.05
+ALGO_THRESHOLDS = {
+    "biattn_cuts":    0.30,   # sigmoid 输出需更高阈值以降低 FDR
+    "multiscale_nts": 0.03,   # 原始权重需更低阈值以提升 TPR
+    "mb_cuts":        0.05,   # 基线保持不变
+}
 
 # 拓扑掩码惩罚权重（物理不可行边的惩罚系数）
 TOPO_PENALTY_WEIGHT = 10.0
@@ -436,7 +445,7 @@ def train_mb_cuts_real(X_all, topo_mask, verbose=True, epochs=None):
         print("  [MB-CUTS] Stage 2: CUTS+ 预热...")
     model_rough = CUTSPlusNet(d).to(DEVICE)
     opt_rough = optim.Adam(model_rough.parameters(), lr=LR)
-    for _ in range(10):
+    for _ in range(30):  # 10→30：预热轮数不足会导致粗糙邻接矩阵信噪比低
         for b_x, b_y in loader:
             opt_rough.zero_grad()
             pred = model_rough(b_x)
@@ -602,7 +611,7 @@ def run_all(line="xin1", epochs=None, threshold=None):
         model_biattn, X_all, topo_mask, epochs=eff_epochs, algo_name="BiAttn-CUTS"
     )
     extract_adj_and_save(model_biattn, valid_vars, topo_mask, line, "biattn_cuts",
-                         threshold=eff_threshold)
+                         threshold=ALGO_THRESHOLDS.get("biattn_cuts", eff_threshold))
     del model_biattn
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
@@ -615,7 +624,7 @@ def run_all(line="xin1", epochs=None, threshold=None):
         model_ms, X_all, topo_mask, epochs=eff_epochs, algo_name="MultiScale-NTS"
     )
     extract_adj_and_save(model_ms, valid_vars, topo_mask, line, "multiscale_nts",
-                         threshold=eff_threshold)
+                         threshold=ALGO_THRESHOLDS.get("multiscale_nts", eff_threshold))
     del model_ms
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
@@ -625,7 +634,7 @@ def run_all(line="xin1", epochs=None, threshold=None):
     print(f"\n--- 训练 MB-CUTS ---")
     model_mb = train_mb_cuts_real(X_all, topo_mask, verbose=True, epochs=eff_epochs)
     extract_adj_and_save(model_mb, valid_vars, topo_mask, line, "mb_cuts",
-                         threshold=eff_threshold)
+                         threshold=ALGO_THRESHOLDS.get("mb_cuts", eff_threshold))
     del model_mb
     if DEVICE.type == "cuda":
         torch.cuda.empty_cache()
