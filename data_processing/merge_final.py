@@ -8,7 +8,7 @@ merge_final.py — 最终 X/Y/指标对齐宽表生成脚本
   2. ±1 分钟容差对齐：Y 的时间戳通常在化验记录的整点或半点，
      X 是 1min 频率；用 merge_asof（容差 1min）将 X 对齐到 Y 的时间戳。
   3. 合并化验指标（indicators）列：同样用 ±1min 容差 merge_asof。
-  4. X 缺失率 > 0.5 的行剔除：该时间点 X 特征超过一半缺失，不可靠。
+  4. X 完全为空的行剔除：该时间点所有 X 特征均缺失，代表真实停产/无数据，不可靠。
   5. 输出宽表用于下游因果发现 + DML 建模。
 
 【前置条件（需先运行以下脚本）】
@@ -27,7 +27,7 @@ merge_final.py — 最终 X/Y/指标对齐宽表生成脚本
   data/modeling_dataset_final.parquet
   - index: time（Y 的化验时间点，分钟精度）
   - columns: 所有 X 特征列 + 所有化验指标列 + y_fx_xin1 + y_fx_xin2
-  - 行：只有 Y 非 NaN 的时间点；X 缺失率 > 0.5 的行已剔除
+  - 行：只有 Y 非 NaN 的时间点；X 完全为空（全 NaN）的行已剔除
 
 【用法】
   python data_processing/merge_final.py
@@ -73,8 +73,9 @@ Y_COL_XIN2 = "y_fx_xin2"
 # ±1 分钟对齐容差（单位：ns，供 pd.merge_asof 使用）
 MERGE_TOLERANCE = pd.Timedelta("1min")
 
-# X 特征行缺失率阈值：超过此比例的行被剔除
-X_MISSING_THRESHOLD = 0.5
+# X 特征行过滤：只剔除所有 X 特征均为 NaN 的行（真实停产/全盲点），不按缺失率阈值剔除。
+# PLC exception-based recording 下，大部分"缺失"已由 preprocess_X.py 的活跃掩码 ffill 填充；
+# 若此处仍有大量缺失，说明该时间点系统根本没有采集到任何数据，属于真实停产空白。
 
 # 是否保存分产线的子数据集（便于分别建模）
 SAVE_PER_LINE = True
@@ -264,20 +265,20 @@ def build_modeling_dataset(
         else:
             _log("  [提示] 化验指标列与 X/Y 列名完全重合，跳过合并（可能需要检查列名冲突）")
 
-    # ── X 缺失率 > 0.5 的行剔除 ───────────────────────────────────────────────
-    # 只统计 X 特征列的缺失率（不含 Y 列和指标列）
+    # ── X 完全为空的行剔除 ────────────────────────────────────────────────────
+    # 只统计 X 特征列（不含 Y 列和指标列）；只过滤所有 X 特征均为 NaN 的行，
+    # 这类行代表真实停产/该时间点系统根本未采集到任何数据。
     x_cols_in_merged = [c for c in X.columns if c in merged.columns]
     y_ind_cols = set(y_cols_to_include)
     if ind is not None:
         y_ind_cols.update(ind.columns)
 
     if x_cols_in_merged:
-        x_missing_rate = merged[x_cols_in_merged].isnull().mean(axis=1)
-        high_missing_mask = x_missing_rate > X_MISSING_THRESHOLD
-        n_removed = high_missing_mask.sum()
+        mask_all_nan = merged[x_cols_in_merged].isnull().all(axis=1)
+        n_removed = mask_all_nan.sum()
         if n_removed > 0:
-            _log(f"[过滤] X 缺失率 > {X_MISSING_THRESHOLD:.0%} 的行: {n_removed} 个 → 已剔除")
-            merged = merged[~high_missing_mask]
+            _log(f"[过滤] X 完全为空的行（真实停产）: {n_removed} 个 → 已剔除")
+            merged = merged[~mask_all_nan]
         _log(f"  过滤后剩余: {len(merged)} 行")
     else:
         _log("[警告] 在合并结果中未找到任何 X 特征列，请检查列名格式。")
@@ -332,7 +333,7 @@ if __name__ == "__main__":
     _log("=" * 60)
     _log("merge_final.py — 最终宽表对齐合并脚本 启动")
     _log(f"产线过滤: {args.line or '全部（xin1 + xin2）'}")
-    _log(f"X 缺失率阈值: {X_MISSING_THRESHOLD:.0%}")
+    _log(f"X 过滤策略: 仅剔除 X 完全为空（全 NaN）的行")
     _log(f"时间对齐容差: ±{MERGE_TOLERANCE}")
     _log("=" * 60)
 

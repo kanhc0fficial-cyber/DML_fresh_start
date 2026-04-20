@@ -5,7 +5,10 @@ preprocess_X.py — X 特征主处理脚本
 
 【设计原则】
   1. 物理硬阈值裁剪（per-tag 上下界）：超范围值直接置 NaN，不做插值平滑。
-  2. 短缺失 ffill（≤ FFILL_LIMIT 分钟）：模拟 DCS 断点后的正常传感器重连。
+  2. Exception-based ffill + 系统级活跃掩码：
+       - PLC/DCS exception-based recording（变化才记录）下，稳定段无记录 ≠ 缺失，
+         应在系统活跃区间内无限制 ffill（"最后已知值"语义）。
+       - 若全系统超过 MAX_GAP_MINUTES 分钟均无任何新记录，视为真实停产空白，保留 NaN。
   3. 整段大缺失直接保留 NaN：不用全局中位数、不加噪声、不做 EWMA 平滑，
      保护因果时滞结构，下游建模自行处理。
   4. 不做孤立森林等 ML 异常检测：防止把因果信号当作噪声清除掉。
@@ -91,9 +94,11 @@ LOG_FILE = BASE_DATA_DIR / "preprocess_X_log.txt"
 # 重采样频率（1 分钟宽表）
 RESAMPLE_FREQ = "1min"
 
-# 短缺失前向填充最大时长（分钟）
-# 超过此时长的连续缺失段直接保留 NaN
-FFILL_LIMIT = 60  # 单位：分钟（即 1min 重采样下最多填 60 个点）
+# 系统级活跃掩码阈值（分钟）
+# PLC/DCS exception-based recording：变化才记录，稳定段无记录不等于缺失。
+# 若全系统超过此时长均无任何新记录，视为真实停产空白，停产区间内保留 NaN（不 ffill）。
+# 工厂连续生产场景下 24 小时通常足够覆盖所有正常稳定段；检修停车超过此值则保留 NaN 符合预期。
+MAX_GAP_MINUTES = 24 * 60  # 单位：分钟
 
 # 物理阈值裁剪字典（可选，格式：{TAG_UPPER: (lo, hi)}）
 # 如果某个 tag 没有配置，则不裁剪，但仍会去掉明显的传感器饱和值（±1e6 硬上界）
@@ -177,18 +182,22 @@ def apply_physical_clip(series: pd.Series, tag: str) -> pd.Series:
     return s
 
 
-# ─── 缺失值处理（ffill 短缺失 + 大缺失保留 NaN）────────────────────────────────
-def handle_missing(series: pd.Series) -> pd.Series:
+# ─── 缺失值处理（exception-based ffill + 系统活跃掩码）────────────────────────
+def handle_missing_exception_based(
+    series: pd.Series,
+    fillable_mask: pd.Series,
+) -> pd.Series:
     """
-    1. 短缺失（连续缺失 ≤ FFILL_LIMIT 个点）：前向填充（ffill）。
-    2. 整段大缺失（连续缺失 > FFILL_LIMIT 个点）：保留 NaN，不填充。
+    针对 exception-based recording（变化才记录）的缺失处理：
+      1. 先无限制 ffill（把所有"值没变所以没记录"的 NaN 都填上）。
+      2. 再用 fillable_mask 把真实停产空白重新置回 NaN。
 
-    这是因为：
-      - 短缺失通常是通信断包，前值有意义。
-      - 长时段缺失说明设备停车或数据未导出，填充会产生虚假平稳段，
-        严重干扰因果推断的时滞估计。
+    fillable_mask: 布尔 Series（与 series 同 index），
+                   True  = 此分钟距上次系统有任何记录 ≤ MAX_GAP_MINUTES，可填充；
+                   False = 全系统超过 MAX_GAP_MINUTES 无任何新记录，停产空白，保留 NaN。
     """
-    return series.ffill(limit=FFILL_LIMIT)
+    filled = series.ffill()               # 无限制，先把所有稳定段填满
+    return filled.where(fillable_mask)    # 真实停产区间重新清空
 
 
 # ─── 单个 Excel 文件解析（calamine 高性能 / openpyxl 回退）────────────────────
@@ -418,7 +427,7 @@ def build_features(
     流程：
       1. 检查白名单 hash，决定是否复用批次缓存。
       2. 按批次读取 xlsx，每批次解析完立即写入缓存（断点保护）。
-      3. 合并所有批次 → 按 1min 重采样 → 物理裁剪 → 短缺失 ffill → 大缺失保留 NaN。
+      3. 合并所有批次 → 按 1min 重采样 → 物理裁剪 → exception-based ffill（系统活跃掩码）→ 停产空白保留 NaN。
       4. 拼宽表输出 Parquet。
     """
     CACHE_DIR.mkdir(exist_ok=True)
@@ -477,8 +486,10 @@ def build_features(
     _save_whitelist_hash(wl_hash)
 
     # ── 合并 + 重采样 + 物理裁剪 + 缺失处理 ─────────────────────────────────
-    _log("\n[合并] 开始合并、重采样、物理裁剪和缺失处理...")
-    all_resampled: dict[str, pd.Series] = {}
+    _log("\n[合并] 开始合并、重采样、物理裁剪...")
+
+    # ── 第一循环：resample + 物理裁剪，暂不 ffill，存原始稀疏序列 ──────────
+    all_resampled_raw: dict[str, pd.Series] = {}
 
     for tag in whitelist:
         parts = accumulated[tag]
@@ -495,17 +506,40 @@ def build_features(
         # 物理硬阈值裁剪（超范围置 NaN，不插值）
         resampled = apply_physical_clip(resampled, tag)
 
-        # 短缺失 ffill，大缺失保留 NaN
-        resampled = handle_missing(resampled)
+        # 暂不 ffill，保留稀疏版本
+        all_resampled_raw[tag] = resampled.astype(np.float32)
 
-        all_resampled[tag] = resampled.astype(np.float32)
-
-    found = len(all_resampled)
+    found = len(all_resampled_raw)
     _log(f"[合并] 在所有批次中共找到 {found} / {len(whitelist)} 个白名单变量")
 
-    if not all_resampled:
+    if not all_resampled_raw:
         _log("[错误] 没有任何变量有数据！请检查白名单与文件格式。")
         return
+
+    # ── 计算系统级活跃掩码 ────────────────────────────────────────────────
+    _log("[活跃掩码] 基于全变量并集计算系统数据活跃区间...")
+
+    # 任意分钟只要有任何一个变量有真实记录，就标记为活跃
+    _sample_series = next(iter(all_resampled_raw.values()))
+    any_data = pd.Series(False, index=_sample_series.index)
+    for s in all_resampled_raw.values():
+        any_data |= s.notna()
+
+    # 向前传播活跃标记：从最后一次有数据的时刻起，向后延伸 MAX_GAP_MINUTES 分钟。
+    # 若超过 MAX_GAP_MINUTES 仍无任何数据 → fillable=False → 停产空白，保留 NaN。
+    fillable = any_data.astype(float).where(any_data, other=np.nan)
+    fillable = fillable.ffill(limit=MAX_GAP_MINUTES).notna()
+
+    n_active = int(fillable.sum())
+    n_total = len(fillable)
+    _log(f"[活跃掩码] 活跃分钟数: {n_active:,} / {n_total:,} ({n_active/n_total:.1%})")
+    _log(f"[活跃掩码] 真实空白（停产）分钟数: {n_total - n_active:,}")
+
+    # ── 第二循环：在活跃区间内 ffill，停产区间保留 NaN ──────────────────
+    _log("[ffill] 对各变量应用 exception-based ffill 策略...")
+    all_resampled: dict[str, pd.Series] = {}
+    for tag, s in all_resampled_raw.items():
+        all_resampled[tag] = handle_missing_exception_based(s, fillable).astype(np.float32)
 
     # ── 拼宽表 ──────────────────────────────────────────────────────────────
     _log("\n[拼接] 合并宽表...")
@@ -550,6 +584,7 @@ if __name__ == "__main__":
     _log(f"批次目录数: {len(DATA_BATCH_DIRS)}")
     for d in DATA_BATCH_DIRS:
         _log(f"  {d}")
+    _log(f"停产判断阈值: MAX_GAP_MINUTES = {MAX_GAP_MINUTES} 分钟（{MAX_GAP_MINUTES/60:.0f} 小时）")
     _log("=" * 60)
 
     whitelist = load_whitelist()
