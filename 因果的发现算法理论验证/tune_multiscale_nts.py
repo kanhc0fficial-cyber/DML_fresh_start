@@ -260,14 +260,17 @@ QUICK_SEARCH_SPACE = {
 
 
 def generate_param_grid(search_space):
-    """从搜索空间生成所有超参数组合"""
+    """从搜索空间生成所有超参数组合
+
+    注意：会自动将 window_size 追加到 kernel_sizes 中（若不存在），
+    因为原始 MultiScaleNTSNet 始终使用 window_size 作为最大感受野分支。
+    """
     keys = list(search_space.keys())
     values = list(search_space.values())
     grid = []
     for combo in itertools.product(*values):
         params = dict(zip(keys, combo))
-        # 处理 kernel_sizes 中包含 window_size 的组合
-        # 追加 window_size 本身作为第三路（如果未包含且合理）
+        # 追加 window_size 作为最大感受野分支（与原始模型设计一致）
         ks = list(params['kernel_sizes'])
         ws = params['window_size']
         if ws not in ks:
@@ -430,7 +433,7 @@ def generate_tuning_report(results_df, best_params, report_path):
     if not results_df.empty:
         top_n = min(10, len(results_df))
         report += "| 排名 | window_size | kernel_sizes | hidden_mult | lr | epochs | l1_lambda | h_lambda | threshold | F1 | SHD |\n"
-        report += "|" + "------|" * 11 + "\n"
+        report += "|------|" * 11 + "\n"
         for i in range(top_n):
             row = results_df.iloc[i]
             report += (f"| {i+1} | {row.get('window_size', '')} | "
