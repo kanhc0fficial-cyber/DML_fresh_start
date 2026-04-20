@@ -202,26 +202,45 @@ def train_biattn_cuts(X: np.ndarray, verbose: bool = False) -> np.ndarray:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 创新方案二：MultiScale-NTS
+# 创新方案二：MultiScale-NTS（多尺度空洞卷积版）
 # ═══════════════════════════════════════════════════════════════════════════
 class MultiScaleNTSNet(nn.Module):
-    KERNEL_SIZES = [3, 5]
+    """
+    多尺度空洞卷积（Multi-Scale Dilated Convolution, MSDC）
+    + 可学习融合权重 + 共享 NOTEARS 约束
+
+    空洞率设计：DILATION_RATES = [1, 2, 4]
+      - dilation=1: 感受野 = 3（短程邻近依赖）
+      - dilation=2: 感受野 = 5（中程时延依赖）
+      - dilation=4: 感受野 = 9（长程跨窗依赖，几乎覆盖 WINDOW_SIZE=10）
+
+    理论依据：
+      1. 感受野多样性：不同空洞率等价于多分辨率时间分析，在同一 kernel_size=3
+         下以指数级扩大感受野，参数量与标准多尺度卷积完全相同。
+      2. Granger 因果完整性：工业时序数据存在多阶因果时延，空洞卷积可在
+         单层内同时捕获短/中/长程 Granger 依赖，比大核卷积更参数高效。
+      3. 与 NOTEARS 兼容性：空洞卷积仅改变特征提取分支，共享的可微 DAG 约束
+         矩阵 W 完全不受影响，理论框架保持自洽。
+
+    alpha 初始化为 zeros：softmax(zeros) = 均匀分布，梯度从对称点出发，
+    收敛更稳定。
+    """
+    DILATION_RATES = [1, 2, 4]   # 对应感受野: 3, 5, 9
 
     def __init__(self, d):
         super().__init__()
         self.d = d
         self.W = nn.Parameter(torch.empty(d, d).uniform_(-0.01, 0.01))
-        kernel_sizes = self.KERNEL_SIZES + [WINDOW_SIZE]
         self.convs = nn.ModuleList([
             nn.Sequential(
-                nn.Conv1d(d, d * 8, kernel_size=ks, groups=d),
+                nn.Conv1d(d, d * 8, kernel_size=3, dilation=r, groups=d),
                 nn.ReLU(),
                 nn.AdaptiveAvgPool1d(1),
                 nn.Conv1d(d * 8, d, kernel_size=1, groups=d)
             )
-            for ks in kernel_sizes
+            for r in self.DILATION_RATES
         ])
-        self.alpha = nn.Parameter(torch.zeros(len(kernel_sizes)))
+        self.alpha = nn.Parameter(torch.zeros(len(self.DILATION_RATES)))
 
     def forward(self, x):
         x_agg = torch.matmul(x, self.W)
@@ -466,7 +485,7 @@ ALGORITHM_CN_NAME = {
     "nts_notears":    "NTS-NOTEARS（基线）",
     "coupled":        "Coupled-三阶段（基线）",
     "biattn_cuts":    "BiAttn-CUTS（方案一：Transformer换头）",
-    "multiscale_nts": "MultiScale-NTS（方案二：多尺度卷积）",
+    "multiscale_nts": "MultiScale-NTS（方案二：多尺度空洞卷积）",
     "mb_cuts":        "MB-CUTS（方案三：马尔可夫毯混合）",
 }
 
