@@ -1,4 +1,0 @@
-﻿experiment,seed,method,n_samples,ate_true,theta_hat,se,ci_lower,ci_upper,bias,covers_true
-0,1000,"RF-DML (高维基线V1, Quick)",500,0.229209,0.267918,0.026601,0.215779,0.320056,0.038708,True
-1,1013,"RF-DML (高维基线V1, Quick)",500,0.229209,0.266968,0.030328,0.207525,0.326412,0.037759,True
-2,1026,"RF-DML (高维基线V1, Quick)",500,0.229209,0.250631,0.029693,0.192433,0.30883,0.021422,True
