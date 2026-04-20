@@ -209,8 +209,12 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     数据源：时序宽表 data/timeseries_dataset_{line}_final.parquet
       - 1min 频率连续时序，~128K 行
       - X 列先在完整时序上 ffill（exception-based recording，有变化才记录），
-        然后再按 Y 非 NaN 过滤。禁止 bfill（会引入未来信息泄露）。
-      - Y 列稀疏（仅化验时间点有值）→ 直接 dropna，只保留有真实化验值的行
+        禁止 bfill（会引入未来信息泄露）。
+      - Y 列稀疏（仅化验时间点有值）→ 在完整时序上 ffill（零阶保持），
+        剔除首个化验点之前无参考值的头部行，然后按 resample_freq 重采样。
+        Y ffill 的物理合理性：精矿品位在相邻化验之间连续变化，零阶保持
+        （最后已知值语义）不改变 X→Y 的因果方向，且保留完整时序结构
+        供滑动窗口 / 时滞因果发现算法使用。
       - 全列 NaN 的 X 特征列自动剔除（整段停产传感器）
     该文件通常超过 100 MB，不随代码库分发，需先运行
     data_processing/merge_final.py --line {line} 生成。
@@ -251,14 +255,30 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     df = df_raw[X_cols].copy()
     df["y_grade"] = df_raw[y_col]
 
+    n_raw = len(df)
+    n_y_obs = df["y_grade"].notna().sum()
+
     # X 列仅前向填充（exception-based recording：有变化才记录，稳定段不记录 ≠ 缺失）。
-    # 必须在 dropna(y_grade) 之前、完整 128K 行时序上执行，否则化验行间隔数小时，
+    # 必须在完整 128K 行时序上执行，否则化验行间隔数小时，
     # ffill 只能在稀疏行之间传播，无法正确填充传感器稳定段。
     # 禁止 bfill：用未来值回填是时间泄露（lookahead leak）。
     df[X_cols] = df[X_cols].ffill()
 
-    # Y 列稀疏：只保留有真实化验值的行，不填充（ffill 会制造大量虚假恒定值，引入虚假因果边）
+    # Y 列：在完整时序上前向填充（零阶保持 / Zero-Order Hold）。
+    # 物理依据：精矿品位在两次化验之间不会突变，最后已知值是合理近似。
+    # 目的：保留完整时序结构（~128K→重采样后 ~12K-15K 行），供时序因果发现
+    # 算法（TCDF/DYNOTEARS/MultiScale-NTS等）构建滑动窗口和时滞建模。
+    # 若改用 dropna(y_grade)，则仅剩 ~1K 行稀疏化验点，时序结构被破坏。
+    # 注意：此 ffill 仅用于因果发现（方向识别），不用于 DML（效应估计）。
+    # DML 脚本加载的是 modeling_dataset（仅含真实 Y 行），不受此处影响。
+    df["y_grade"] = df["y_grade"].ffill()
+
+    # 剔除首个化验点之前的行（Y 尚无参考值，ffill 无法填充）
     df = df.dropna(subset=["y_grade"])
+
+    # 按 resample_freq 重采样（默认 10min），降低计算量同时保留时序结构
+    if resample_freq:
+        df = df.resample(resample_freq).last().dropna(subset=["y_grade"])
 
     # 剔除填充后仍为全 NaN 的 X 特征列（整段停产的传感器通道）
     all_nan_cols = [c for c in X_cols if df[c].isna().all()]
@@ -272,7 +292,9 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     var_to_stage = {v: s for v, s in var_to_stage.items() if v in X_cols_set}
     var_to_group = {v: g for v, g in var_to_group.items() if v in X_cols_set}
 
-    print(f"  [产线={line}] 时序宽表: {len(df)} 行 x {len(df.columns)} 列, "
-          f"Y={y_col}, 时间范围: {df.index.min()} ~ {df.index.max()}")
+    print(f"  [产线={line}] 时序宽表: {n_raw} 行 (原始 1min) → {len(df)} 行 "
+          f"(重采样 {resample_freq or '无'}) | Y 真实化验点={n_y_obs} | "
+          f"特征列={len(X_cols)} | Y={y_col} | "
+          f"时间范围: {df.index.min()} ~ {df.index.max()}")
 
     return df, X_cols, var_to_stage, var_to_group
