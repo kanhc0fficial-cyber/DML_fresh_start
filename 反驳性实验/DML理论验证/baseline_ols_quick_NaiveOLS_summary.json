@@ -1,0 +1,11 @@
+{
+  "method": "Naive Regression (Quick)",
+  "n_experiments": 5,
+  "mean_bias": -0.025656,
+  "median_bias": -0.007184,
+  "rmse": 0.055807,
+  "coverage_95": 0.8,
+  "mean_se": 0.03861,
+  "bias_t_stat": -1.158,
+  "bias_p_value": 0.247
+}
