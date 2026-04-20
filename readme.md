@@ -237,6 +237,17 @@ DML_fresh_start/
 | **功能** | 在 v3/v4 基础上新增四项微创新：A. 因果优先梯度投影、B. 双流潜变量、C. 课程式训练、D. 不确定性加权 DML 残差，含消融实验 |
 | **运行** | `python 反驳性实验/run_refutation_xin2_v5.py --mode all` 或 `--mode ablation` |
 
+### 6.5 `tune_v5_hyperparameters.py` — V5 超参数调优
+
+| 项 | 说明 |
+|----|------|
+| **输入** | 真实管线：`data/modeling_dataset_xin2_final.parquet`；模拟管线：`SyntheticDAGGenerator` 合成数据 |
+| **输出** | `反驳性实验/超参数调优/` 下：最佳参数 JSON + 调优历史 CSV + 调优报告 TXT |
+| **功能** | 使用贝叶斯优化（Optuna TPE）或准随机搜索，对 v5 四项微创新的核心超参数进行自动调优。支持真实/模拟双管线 |
+| **运行** | `python 反驳性实验/tune_v5_hyperparameters.py --pipeline real --n_trials 30`<br>`python 反驳性实验/tune_v5_hyperparameters.py --pipeline simulation --n_trials 50`<br>`python 反驳性实验/tune_v5_hyperparameters.py --pipeline both --n_trials 30` |
+
+> **调优方法选择**：优先使用 Optuna TPE 贝叶斯优化（`pip install optuna`），因为 v5 目标函数是计算昂贵的黑盒函数，TPE 比网格/随机搜索效率高 3-10 倍。若 Optuna 未安装，自动回退到准随机搜索。
+
 ### 辅助脚本
 
 | 脚本 | 功能 |
@@ -376,6 +387,9 @@ DML_fresh_start/
 │                                  (无偏性/覆盖率/       │
 │  tune_multiscale_nts             √n-一致性)            │
 │  (超参网格搜索)                                        │
+│                                  tune_v5_hyper-        │
+│                                  parameters            │
+│                                  (贝叶斯调优)          │
 │                                                        │
 └────────────────────────────────────────────────────────┘
 ```
@@ -413,6 +427,9 @@ python DAG图分析/DAG解析结果/analyze_dag_causal_roles_v4_1.py --algo biat
 
 # 6. DML 反驳实验
 python 反驳性实验/run_refutation_xin2_v5.py --mode all
+
+# 7. V5 超参数调优（可选，优化 v5 四项微创新的超参）
+python 反驳性实验/tune_v5_hyperparameters.py --pipeline real --n_trials 30
 ```
 
 ## 合成数据管线（无需外部数据）
@@ -421,8 +438,11 @@ python 反驳性实验/run_refutation_xin2_v5.py --mode all
 # 蒙特卡洛基准测试
 python 因果的发现算法理论验证/run_monte_carlo_benchmark_fixed.py --n_experiments 50
 
-# 超参调优
+# 超参调优（因果发现算法）
 python 因果的发现算法理论验证/tune_multiscale_nts.py --n_trials 5
+
+# V5 超参调优（DML 创新方法，在模拟数据上调优）
+python 反驳性实验/tune_v5_hyperparameters.py --pipeline simulation --n_trials 30
 
 # DML 理论验证
 python 反驳性实验/run_dml_theory_validation.py --mode all
