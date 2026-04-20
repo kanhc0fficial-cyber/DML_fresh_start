@@ -583,7 +583,25 @@ def _generate_standard_folds(n: int, n_folds: int, seed: int):
     return list(kf.split(indices))
 
 
-# ═══════════════════════════════════════════════════════════════════
+def _generate_valid_folds(n: int, n_folds: int, D_normed: np.ndarray,
+                          seed: int, jitter_ratio: float = 0.0,
+                          max_retries: int = 100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏"""
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    return _generate_standard_folds(n, n_folds, seed)# ═══════════════════════════════════════════════════════════════════
 #  v5 DML 估计器（含全部四项微创新）
 # ═══════════════════════════════════════════════════════════════════
 
@@ -650,21 +668,11 @@ def v5_dml_estimate(Y: np.ndarray, D: np.ndarray, X_ctrl: np.ndarray,
         res_D_all = np.full(n, np.nan)
         weights_all = np.full(n, np.nan)
 
-        # 折边随机化（继承 v4）
-        if fold_jitter_ratio > 0:
-            folds = _generate_jittered_folds(n, n_folds, seed=seed_b,
-                                             jitter_ratio=fold_jitter_ratio)
-        else:
-            folds = _generate_standard_folds(n, n_folds, seed=seed_b)
-
-        # 分层检查阈值
-        d_median = np.median(D_normed)
+        # 折边随机化 + 分层检查（通过 _generate_valid_folds 保证所有折可用）
+        folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                      jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
 
         for train_idx, test_idx in folds:
-            # 分层检查（继承 v4）
-            n_high = np.sum(D_normed[train_idx] > d_median)
-            if n_high < MIN_TREAT_SAMPLES:
-                continue
 
             X_train = X_normed[train_idx]
             X_test = X_normed[test_idx]

@@ -371,6 +371,26 @@ def _generate_standard_folds(n, n_folds, seed):
     return list(kf.split(np.arange(n)))
 
 
+def _generate_valid_folds(n, n_folds, D_normed, seed, jitter_ratio=0.0,
+                          max_retries=100):
+    """生成满足分层要求的折叠划分，避免跳过折导致样本遗漏"""
+    d_median = np.median(D_normed)
+    for attempt in range(max_retries):
+        current_seed = seed + attempt * 1000
+        if jitter_ratio > 0:
+            folds = _generate_jittered_folds(n, n_folds, current_seed, jitter_ratio)
+        else:
+            folds = _generate_standard_folds(n, n_folds, current_seed)
+        all_valid = True
+        for train_idx, _ in folds:
+            if np.sum(D_normed[train_idx] > d_median) < MIN_TREAT_SAMPLES:
+                all_valid = False
+                break
+        if all_valid:
+            return folds
+    return _generate_standard_folds(n, n_folds, seed)
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  v5 DML 估计器（高维版）
 # ═══════════════════════════════════════════════════════════════════
@@ -397,14 +417,9 @@ def v5_highdim_dml_estimate(Y, D, X_ctrl, seed=42, n_folds=5, n_repeats=5,
         res_Y_all = np.full(n, np.nan)
         res_D_all = np.full(n, np.nan)
         weights_all = np.full(n, np.nan)
-        if fold_jitter_ratio > 0:
-            folds = _generate_jittered_folds(n, n_folds, seed=seed_b, jitter_ratio=fold_jitter_ratio)
-        else:
-            folds = _generate_standard_folds(n, n_folds, seed=seed_b)
-        d_median = np.median(D_normed)
+        folds = _generate_valid_folds(n, n_folds, D_normed, seed_b,
+                                      jitter_ratio=fold_jitter_ratio if fold_jitter_ratio > 0 else 0.0)
         for train_idx, test_idx in folds:
-            n_high = np.sum(D_normed[train_idx] > d_median)
-            if n_high < MIN_TREAT_SAMPLES: continue
             X_tr, X_te = X_normed[train_idx], X_normed[test_idx]
             Y_tr, Y_te = Y_normed[train_idx], Y_normed[test_idx]
             D_tr, D_te = D_normed[train_idx], D_normed[test_idx]
