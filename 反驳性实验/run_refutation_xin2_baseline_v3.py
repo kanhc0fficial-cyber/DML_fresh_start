@@ -144,6 +144,7 @@ GBM_MIN_SAMPLES_LEAF = 10     # 叶节点最小样本数（工业小样本场景
 RLEARNER_N_ESTIMATORS     = 100
 RLEARNER_MAX_DEPTH        = 5
 RLEARNER_MIN_SAMPLES_LEAF = 5
+RLEARNER_MIN_WEIGHT       = 1e-10  # 伪结果权重阈值（res_D² < 此值的样本不参与拟合）
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -436,7 +437,6 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             w_weights  = res_D ** 2
 
             # 排除权重接近零的样本（res_D ≈ 0 意味着无信息）
-            RLEARNER_MIN_WEIGHT = 1e-10
             w_mask = w_weights > RLEARNER_MIN_WEIGHT
             if w_mask.sum() >= MIN_VALID_RESIDUALS:
                 X_rl     = X_vl_all[w_mask]
