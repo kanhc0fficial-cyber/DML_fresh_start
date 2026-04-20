@@ -397,10 +397,12 @@ if __name__ == "__main__":
             if y_col not in df.columns:
                 continue
 
-            # 时序宽表：全时间轴（Y 稀疏）
+            # 时序宽表：全时间轴（Y 稀疏），只保留本产线的 Y 列
+            other_y = Y_COL_XIN1 if y_col == Y_COL_XIN2 else Y_COL_XIN2
+            ts_line_df = df.drop(columns=[other_y], errors="ignore")
             ts_line_out = BASE_DATA_DIR / f"timeseries_dataset_{line_name}_final.parquet"
-            df.to_parquet(ts_line_out, compression="snappy")
-            _log(f"  [保存] {line_name} 时序宽表: {df.shape}  → {ts_line_out}")
+            ts_line_df.to_parquet(ts_line_out, compression="snappy")
+            _log(f"  [保存] {line_name} 时序宽表: {ts_line_df.shape}  → {ts_line_out}")
 
             # 监督宽表：仅 Y 非 NaN 行（DML 用）
             modeling_line_df = df.dropna(subset=[y_col])
