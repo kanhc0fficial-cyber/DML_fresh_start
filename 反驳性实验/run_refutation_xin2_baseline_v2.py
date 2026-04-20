@@ -250,6 +250,7 @@ def _build_lag_features(X_norm: np.ndarray, n_lags: int) -> np.ndarray:
     """
     T, d = X_norm.shape
     n_samples = T - n_lags
+    # row_idx[i, :] = [i, i+1, ..., i+n_lags-1]，即从时间步 i 开始的 n_lags 个行索引
     row_idx = np.arange(n_samples)[:, None] + np.arange(n_lags)[None, :]  # (n_samples, n_lags)
     windows = X_norm[row_idx]  # (n_samples, n_lags, d)
     return windows.reshape(n_samples, n_lags * d).astype(np.float32)

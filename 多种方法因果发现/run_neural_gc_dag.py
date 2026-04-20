@@ -8,10 +8,11 @@ run_neural_gc_dag.py
 核心方法：Component-wise MLP (cMLP) + 组 LASSO
 ─────────────────────────────────────────────────
 对于每个目标变量 j，独立训练一个 cMLP_j：
-  - 输入：[X_{t-K}, ..., X_{t-1}] ∈ R^{d_j × K}
-    （物理拓扑允许的源变量 × K 步滞后，K_LAGS=18 → 180min ≈ 3h）
-  - 第一层权重：W1 ∈ R^{(d_j·K) × H}，按源变量 i 分组
-    W1_group[i] = W1[i·K : (i+1)·K, :] ∈ R^{K × H}
+  - 输入：展平后的滞后特征 ∈ R^{d_j · K}，
+    排列顺序为「源优先」：[src_0_lag0..K, src_1_lag0..K, ..., src_{d_j-1}_lag0..K]
+    其中 d_j = 允许源的数量，K = K_LAGS=18（3h@10min）
+  - 第一层权重：W1 ∈ R^{H × (d_j·K)}，按源变量 i 分组：
+    W1_group[i] = W1[:, i·K : (i+1)·K] ∈ R^{H × K}
   - 组 LASSO 惩罚：λ_group · Σ_i ‖W1_group[i]‖_F
     → 每个源变量的所有滞后权重作为一组，稀疏化源选择
   - 后续层：SiLU + 全连接层 → 非线性建模高阶交互
@@ -165,8 +166,8 @@ def build_lag_matrix(X: np.ndarray, k: int) -> np.ndarray:
     # row_idx[i, s] = i + s，shape (n, k)
     row_idx = np.arange(n)[:, None] + np.arange(k)[None, :]
     windows = X[row_idx]                           # (n, k, d)
-    # reshape to (n, d*k)：source 0 all lags first, then source 1, ...
-    # 转置 windows → (n, d, k) 再 reshape → (n, d*k)
+    # reshape to (n, d*k)：transpose(0,2,1) 将 (n,k,d) → (n,d,k)，
+    # 再 reshape → (n, d*k)，列排列为「源优先」：src_0 的 k 列, src_1 的 k 列, ...
     X_lag = windows.transpose(0, 2, 1).reshape(n, d * k).astype(np.float32)
     X_target = X[k:].astype(np.float32)
     return X_lag, X_target
@@ -226,10 +227,12 @@ def train_one_target(
         return np.zeros(n_total, dtype=np.float32)
 
     # 从完整 lag 矩阵中提取允许源的特征列
-    # X_lag_all 排列：src_0 的 k 列，src_1 的 k 列，...（见 build_lag_matrix 转置逻辑）
-    col_idx = []
-    for src_i in allowed_src:
-        col_idx.extend(range(src_i * k_lags, (src_i + 1) * k_lags))
+    # build_lag_matrix 内部执行了 transpose(0,2,1): windows(n,k,d) → (n,d,k)
+    # 再 reshape → (n, d*k)，所以列排列是: src_0的k列, src_1的k列, ...（源优先）
+    # 提取第 src_i 个源的列：[src_i*k_lags, ..., (src_i+1)*k_lags - 1]
+    col_idx = np.concatenate(
+        [np.arange(src_i * k_lags, (src_i + 1) * k_lags) for src_i in allowed_src]
+    ).astype(int)
     X_in = X_lag_all[:, col_idx]      # (n_samples, n_src * k_lags)
     y_in = X_target_all[:, j]         # (n_samples,)
 
