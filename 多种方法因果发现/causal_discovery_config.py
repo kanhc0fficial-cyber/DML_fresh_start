@@ -208,8 +208,9 @@ def prepare_data(line: str, resample_freq: str = "10min"):
 
     数据源：时序宽表 data/timeseries_dataset_{line}_final.parquet
       - 1min 频率连续时序，~128K 行
+      - X 列先在完整时序上 ffill（exception-based recording，有变化才记录），
+        然后再按 Y 非 NaN 过滤。禁止 bfill（会引入未来信息泄露）。
       - Y 列稀疏（仅化验时间点有值）→ 直接 dropna，只保留有真实化验值的行
-      - X 列少量缺失 → 前向/后向填充（处理传感器短暂停采）
       - 全列 NaN 的 X 特征列自动剔除（整段停产传感器）
     该文件通常超过 100 MB，不随代码库分发，需先运行
     data_processing/merge_final.py --line {line} 生成。
@@ -250,11 +251,14 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     df = df_raw[X_cols].copy()
     df["y_grade"] = df_raw[y_col]
 
+    # X 列仅前向填充（exception-based recording：有变化才记录，稳定段不记录 ≠ 缺失）。
+    # 必须在 dropna(y_grade) 之前、完整 128K 行时序上执行，否则化验行间隔数小时，
+    # ffill 只能在稀疏行之间传播，无法正确填充传感器稳定段。
+    # 禁止 bfill：用未来值回填是时间泄露（lookahead leak）。
+    df[X_cols] = df[X_cols].ffill()
+
     # Y 列稀疏：只保留有真实化验值的行，不填充（ffill 会制造大量虚假恒定值，引入虚假因果边）
     df = df.dropna(subset=["y_grade"])
-
-    # X 列前向/后向填充（处理传感器短暂停采缺口，保持时序连续性）
-    df[X_cols] = df[X_cols].ffill().bfill()
 
     # 剔除填充后仍为全 NaN 的 X 特征列（整段停产的传感器通道）
     all_nan_cols = [c for c in X_cols if df[c].isna().all()]
