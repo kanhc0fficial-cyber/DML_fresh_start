@@ -428,11 +428,16 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
         theta_rl = None
         try:
             eps = 1e-6
-            w_pseudo   = res_Y / (res_D + eps * np.sign(res_D + 1e-30))
+            # 安全除法：保留 res_D 符号，对绝对值过小的用带符号 eps 替换
+            safe_res_D = np.where(np.abs(res_D) < eps, np.sign(res_D) * eps, res_D)
+            # 处理 res_D 恰好为 0 的情况（sign=0），赋正 eps
+            safe_res_D = np.where(safe_res_D == 0, eps, safe_res_D)
+            w_pseudo   = res_Y / safe_res_D
             w_weights  = res_D ** 2
 
             # 排除权重接近零的样本（res_D ≈ 0 意味着无信息）
-            w_mask = w_weights > 1e-10
+            RLEARNER_MIN_WEIGHT = 1e-10
+            w_mask = w_weights > RLEARNER_MIN_WEIGHT
             if w_mask.sum() >= MIN_VALID_RESIDUALS:
                 X_rl     = X_vl_all[w_mask]
                 w_ps     = w_pseudo[w_mask]

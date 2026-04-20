@@ -310,11 +310,21 @@ def piecewise_slope_test(D: np.ndarray, Y: np.ndarray, n_segments: int = N_SEGME
         return None, np.nan, None
 
     slopes_arr = np.array(slopes)
-    mean_slope = np.mean(np.abs(slopes_arr))
-    if mean_slope < 1e-8:
+    # 使用标准差/绝对值均值作为 CV，正确处理混合符号情况
+    # 如果斜率符号不一致，这本身就是强非线性证据
+    mean_abs_slope = np.mean(np.abs(slopes_arr))
+    if mean_abs_slope < 1e-8:
         return slopes_arr, np.nan, None
 
-    slope_cv = float(np.std(slopes_arr) / mean_slope)
+    # 检查符号一致性：如果斜率符号翻转，直接判定非线性
+    signs = np.sign(slopes_arr)
+    sign_consistent = np.all(signs == signs[0])
+    if not sign_consistent:
+        # 斜率方向在不同段发生翻转，强非线性证据
+        slope_cv = float(np.std(slopes_arr) / mean_abs_slope)
+        return slopes_arr, max(slope_cv, SLOPE_CV_THRESH + 0.01), True
+
+    slope_cv = float(np.std(slopes_arr) / mean_abs_slope)
     reject_linear = bool(slope_cv > SLOPE_CV_THRESH)
 
     return slopes_arr, slope_cv, reject_linear
@@ -492,7 +502,7 @@ def run_assessment(line: str = "xin2", alpha: float = ALPHA_RESET):
     print(f"\n详细结果已保存：{csv_path}")
 
     # ── 生成汇总报告 ─────────────────────────────────────────────────
-    evaluable = df_results[df_results["可评估"] == True]
+    evaluable = df_results[df_results["可评估"]]
     if evaluable.empty:
         print("[警告] 没有可评估的操作变量，请检查数据。")
         return df_results

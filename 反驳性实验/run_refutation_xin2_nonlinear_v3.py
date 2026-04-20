@@ -579,9 +579,11 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
         theta_dml     = theta_std_dml * (Y_std / D_std)
 
         # ── R-Learner theta（非线性估计）───────────────────────────
-        eps       = 1e-8
-        # 安全除法：对绝对值过小的 res_D 用 eps 替换，防止除零
-        safe_res_D = np.where(np.abs(res_D) < eps, eps, res_D)
+        eps       = 1e-6
+        # 安全除法：对绝对值过小的 res_D 用带符号的 eps 替换，防止除零并保留方向
+        safe_res_D = np.where(np.abs(res_D) < eps, np.sign(res_D) * eps, res_D)
+        # 处理 res_D 恰好为 0 的情况（sign=0），赋正 eps
+        safe_res_D = np.where(safe_res_D == 0, eps, safe_res_D)
         W_pseudo   = res_Y / safe_res_D
         w_weights  = res_D ** 2
 
