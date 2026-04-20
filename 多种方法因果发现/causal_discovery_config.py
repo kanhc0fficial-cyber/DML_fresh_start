@@ -206,12 +206,16 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     """
     载入并对齐 X 特征和 Y 目标，按产线过滤变量。
 
-    新数据格式：X 特征与 Y 品位已合并到产线级建模宽表
-    （data/modeling_dataset_{line}_final.parquet），直接读取即可，
-    无需额外的重采样或时间对齐。
+    数据源：时序宽表 data/timeseries_dataset_{line}_final.parquet
+      - 1min 频率连续时序，~128K 行
+      - Y 列稀疏（仅化验时间点有值，其余为 NaN）→ 前向/后向填充补全
+      - X 列少量缺失 → 前向/后向填充（处理传感器短暂停采）
+      - 全列 NaN 的 X 特征列自动剔除（整段停产传感器）
+    该文件通常超过 100 MB，不随代码库分发，需先运行
+    data_processing/merge_final.py --line {line} 生成。
 
     返回:
-      df: 包含所有特征列和 'y_grade' 列的 DataFrame
+      df: 包含所有特征列和 'y_grade' 列的 DataFrame（无 NaN）
       X_cols: 特征列名列表（不包含 y_grade）
       var_to_stage: {变量名: Stage_ID}
       var_to_group: {变量名: Group}
@@ -219,32 +223,47 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     var_to_stage, var_to_group, valid_vars = load_vars_and_stages(line)
     y_col = LINE_TO_Y_COL[line]
 
-    # 加载产线建模宽表（X + Y 已合并，行为 Y 非 NaN 的时间点）
-    dataset_path = os.path.join(DATA_DIR, f"modeling_dataset_{line}_final.parquet")
+    # 加载时序宽表（连续 1min 时序，供时序因果发现算法使用）
+    dataset_path = os.path.join(DATA_DIR, f"timeseries_dataset_{line}_final.parquet")
     if not os.path.exists(dataset_path):
         raise FileNotFoundError(
-            f"找不到产线建模数据集: {dataset_path}\n"
+            f"找不到时序宽表: {dataset_path}\n"
             f"请先运行 data_processing/merge_final.py --line {line}"
         )
 
     df_raw = pd.read_parquet(dataset_path)
     df_raw.index = pd.to_datetime(df_raw.index).tz_localize(None)
 
+    # 确认 Y 列存在
+    if y_col not in df_raw.columns:
+        raise KeyError(
+            f"时序宽表中没有 Y 列 '{y_col}'，请检查 data_processing/merge_final.py 的输出。"
+        )
+
     # 只保留在 valid_vars 中且实际存在于数据集的特征列
     X_cols = [c for c in valid_vars if c in df_raw.columns]
     missing = [c for c in valid_vars if c not in df_raw.columns]
     if missing:
-        print(f"  [警告] {len(missing)} 个变量不在建模数据集中，将跳过: {missing[:5]}...")
-
-    # 确认 Y 列存在
-    if y_col not in df_raw.columns:
-        raise KeyError(
-            f"建模数据集中没有 Y 列 '{y_col}'，请检查 data_processing/merge_final.py 的输出。"
-        )
+        print(f"  [警告] {len(missing)} 个变量不在时序宽表中，将跳过: {missing[:5]}...")
 
     # 构建输出 DataFrame：选取 X 特征列 + Y 列（重命名为 y_grade）
     df = df_raw[X_cols].copy()
-    df["y_grade"] = df_raw[y_col]  # index-based alignment; both share the same index
+    df["y_grade"] = df_raw[y_col]
+
+    # Y 列稀疏 → 前向填充后向填充（品位为缓变量，最近测量值是合理估计）
+    df["y_grade"] = df["y_grade"].ffill().bfill()
+
+    # X 列前向/后向填充（处理传感器短暂停采缺口，保持时序连续性）
+    df[X_cols] = df[X_cols].ffill().bfill()
+
+    # 剔除填充后仍为全 NaN 的 X 特征列（整段停产的传感器通道）
+    all_nan_cols = [c for c in X_cols if df[c].isna().all()]
+    if all_nan_cols:
+        print(f"  [提示] 剔除 {len(all_nan_cols)} 个全 NaN 的 X 特征列")
+        df = df.drop(columns=all_nan_cols)
+        X_cols = [c for c in X_cols if c not in all_nan_cols]
+
+    # 丢弃 y_grade 仍为 NaN 的行（ffill+bfill 后极少，说明整段无任何化验记录）
     df = df.dropna(subset=["y_grade"])
 
     # 更新 var_to_stage / var_to_group，只保留实际存在的特征
@@ -252,7 +271,7 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     var_to_stage = {v: s for v, s in var_to_stage.items() if v in X_cols_set}
     var_to_group = {v: g for v, g in var_to_group.items() if v in X_cols_set}
 
-    print(f"  [产线={line}] 数据集: {len(df)} 行 x {len(df.columns)} 列, "
+    print(f"  [产线={line}] 时序宽表: {len(df)} 行 x {len(df.columns)} 列, "
           f"Y={y_col}, 时间范围: {df.index.min()} ~ {df.index.max()}")
 
     return df, X_cols, var_to_stage, var_to_group
