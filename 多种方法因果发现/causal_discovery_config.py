@@ -67,9 +67,9 @@ def _infer_group(var_name: str) -> str:
     磨磁（MC1/MC2）和公用辅助（Stage 0/1）默认归为 Group C。
     """
     upper = var_name.upper()
-    if re.search(r'FX_X1', upper):
+    if 'FX_X1' in upper:
         return "A"
-    if re.search(r'FX_X2', upper):
+    if 'FX_X2' in upper:
         return "B"
     return "C"
 
@@ -97,7 +97,7 @@ def _parse_var_stage_from_md(md_path: str) -> dict:
     sections = re.split(r'## Stage (\S+)', content)
     i = 1
     while i + 1 < len(sections):
-        stage = sections[i].split()[0]  # 取第一个词，去掉后面的 "-"
+        stage = sections[i]  # captured group: the stage identifier (e.g., '0', '6')
         body = sections[i + 1]
         # 匹配表格行中的变量名（第2列，可能带反引号）
         for m in re.finditer(r'\|\s*\d+\s*\|\s*`?(\S+?)`?\s*\|', body):
@@ -244,7 +244,7 @@ def prepare_data(line: str, resample_freq: str = "10min"):
 
     # 构建输出 DataFrame：选取 X 特征列 + Y 列（重命名为 y_grade）
     df = df_raw[X_cols].copy()
-    df["y_grade"] = df_raw[y_col].values
+    df["y_grade"] = df_raw[y_col]  # index-based alignment; both share the same index
     df = df.dropna(subset=["y_grade"])
 
     # 更新 var_to_stage / var_to_group，只保留实际存在的特征
