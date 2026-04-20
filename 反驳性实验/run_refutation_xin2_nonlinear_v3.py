@@ -523,7 +523,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             val_end   = (k + 1) * block_size if k < K_FOLDS - 1 else N
 
             # 使用线程锁保护模型初始化时的全局 RNG 状态
-            # （torch.manual_seed 是全局的，多线程并发时会有竞争条件）
+            # （torch.manual_seed/np.random.seed 是全局的，多线程并发时会有竞争条件）
             _fold_seed = (base_seed * 100 + k) % (2**31)
 
             Xtr_np = seqs_X[:train_end]
@@ -537,6 +537,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
             # ── Stage 1：训练 VAE（只重建 X，不涉及 Y/D）──────────
             with _TORCH_SEED_LOCK:
                 torch.manual_seed(_fold_seed)
+                np.random.seed(_fold_seed)
                 encoder = VAEEncoder(input_dim, LATENT_DIM).to(device)
                 decoder = VAEDecoder(LATENT_DIM, SEQ_LEN, input_dim).to(device)
             _train_vae_stage1(encoder, decoder, Xtr, device)
@@ -552,8 +553,11 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
                 mu_vl = encoder.encode_mean(Xvl)   # shape: [val_size, LATENT_DIM]
 
             # ── Stage 2：独立训练 head_Y 和 head_D ───────────────
+            # 偏移种子以区分 Stage 1 和 Stage 2 的权重初始化
+            _stage2_seed = (_fold_seed + 50000) % (2**31)
             with _TORCH_SEED_LOCK:
-                torch.manual_seed(_fold_seed + 1000)
+                torch.manual_seed(_stage2_seed)
+                np.random.seed(_stage2_seed)
                 head_Y = PredHead(LATENT_DIM).to(device)
                 head_D = PredHead(LATENT_DIM).to(device)
             _train_head_stage2(head_Y, mu_tr, Ytr, device)
