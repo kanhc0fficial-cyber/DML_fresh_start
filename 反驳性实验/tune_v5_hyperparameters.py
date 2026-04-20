@@ -107,6 +107,21 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  目标函数评分权重
+# ═══════════════════════════════════════════════════════════════════
+# 模拟管线: score = RMSE + COVERAGE_WEIGHT * |Coverage - 0.95| + BIAS_WEIGHT * |Bias|
+COVERAGE_WEIGHT = 0.5
+BIAS_WEIGHT = 0.3
+
+# 真实管线: score = mean_cv - SIGN_RATE_WEIGHT * mean_sign_rate - SUCCESS_RATE_WEIGHT * success_rate
+SIGN_RATE_WEIGHT = 0.5
+SUCCESS_RATE_WEIGHT = 0.3
+
+# 失败惩罚值（当目标函数评估失败时的得分上界）
+FAILURE_PENALTY = 10.0
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  超参数搜索空间定义
 # ═══════════════════════════════════════════════════════════════════
 
@@ -225,11 +240,7 @@ def _objective_simulation(params: dict, n_eval_experiments: int = 10,
       score = RMSE + 0.5 * |Coverage - 0.95| + 0.3 * |Bias|
     """
     import dml_validation_common as dvc
-    from run_dml_theory_validation_v5 import (
-        DualStreamVAEDML, v5_dml_estimate,
-        LATENT_DIM_CAUSAL as DEFAULT_LATENT_DIM_CAUSAL,
-        LATENT_DIM_RECON as DEFAULT_LATENT_DIM_RECON,
-    )
+    from run_dml_theory_validation_v5 import v5_dml_estimate  # noqa: F401
 
     # 注入超参数到模块级全局变量（暂存 + 恢复）
     import run_dml_theory_validation_v5 as v5_mod
@@ -308,7 +319,7 @@ def _objective_simulation(params: dict, n_eval_experiments: int = 10,
                 coverage_list.append(covered)
             except Exception:
                 # 模型训练失败，记录为高惩罚
-                theta_list.append(ate_true + 10.0)
+                theta_list.append(ate_true + FAILURE_PENALTY)
                 coverage_list.append(0.0)
 
         theta_arr = np.array(theta_list)
@@ -317,7 +328,7 @@ def _objective_simulation(params: dict, n_eval_experiments: int = 10,
         coverage = float(np.mean(coverage_list))
 
         # 综合得分（越低越好）
-        score = rmse + 0.5 * abs(coverage - 0.95) + 0.3 * abs(bias)
+        score = rmse + COVERAGE_WEIGHT * abs(coverage - 0.95) + BIAS_WEIGHT * abs(bias)
 
         return {
             "score": score,
@@ -354,7 +365,7 @@ def _objective_real(params: dict, df: pd.DataFrame, ops: list,
       - n_significant:  p < 0.05 的比例
 
     综合目标（用于最小化）：
-      score = mean_cv - 0.5 * mean_sign_rate - 0.3 * success_rate
+      score = mean_cv - SIGN_RATE_WEIGHT * mean_sign_rate - SUCCESS_RATE_WEIGHT * success_rate
     """
     from run_refutation_xin2_v5 import (
         train_one_op, build_safe_x_with_dag, get_safe_x,
@@ -374,10 +385,10 @@ def _objective_real(params: dict, df: pd.DataFrame, ops: list,
         "uncertainty_clip_quantile": "UNCERTAINTY_CLIP_QUANTILE",
         "beta_kl": "BETA_KL",
         "hidden_dim_enc": "HIDDEN_DIM_ENC",
-        "hidden_dim_head": "HIDDEN_DIM_HEAD",
         "seq_len": "SEQ_LEN",
         "n_bootstrap": "N_BOOTSTRAP",
-        "lr": None,  # 学习率在 optimizer 初始化时使用，不是模块全局变量
+        # 注：lr 和 hidden_dim_head 在训练函数内硬编码，
+        # 需要重构训练函数才能注入。当前仅通过模拟管线间接影响。
     }
 
     for param_name, module_name in hp_map.items():
@@ -393,7 +404,7 @@ def _objective_real(params: dict, df: pd.DataFrame, ops: list,
         # 选择评估用的操作变量（选信号最强的 n_ops_eval 个）
         eval_ops = _select_eval_ops(df_eval, ops, states, dag_roles, n_ops_eval)
         if not eval_ops:
-            return {"score": 10.0, "mean_cv": 1.0, "mean_sign_rate": 0.0,
+            return {"score": FAILURE_PENALTY, "mean_cv": 1.0, "mean_sign_rate": 0.0,
                     "success_rate": 0.0, "n_significant": 0.0}
 
         cv_list = []
@@ -426,7 +437,7 @@ def _objective_real(params: dict, df: pd.DataFrame, ops: list,
                 significant_count += 1
 
         if success_count == 0:
-            return {"score": 10.0, "mean_cv": 1.0, "mean_sign_rate": 0.0,
+            return {"score": FAILURE_PENALTY, "mean_cv": 1.0, "mean_sign_rate": 0.0,
                     "success_rate": 0.0, "n_significant": 0.0}
 
         mean_cv = float(np.mean(cv_list))
@@ -436,7 +447,7 @@ def _objective_real(params: dict, df: pd.DataFrame, ops: list,
 
         # 综合得分（越低越好）
         # 优先稳定性（低 CV），其次方向一致，最后成功率
-        score = mean_cv - 0.5 * mean_sign_rate - 0.3 * success_rate
+        score = mean_cv - SIGN_RATE_WEIGHT * mean_sign_rate - SUCCESS_RATE_WEIGHT * success_rate
 
         return {
             "score": score,
