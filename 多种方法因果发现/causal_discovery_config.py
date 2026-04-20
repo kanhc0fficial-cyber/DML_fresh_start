@@ -19,16 +19,24 @@ causal_discovery_config.py
   - 公共/辅助(0,1) -> 主流程(2+): 允许
   - F 禁止跨产线: Group A 变量不能影响 xin2 的 Y，反之亦然
 """
+import re
 import pandas as pd
 import numpy as np
 import os
 
-# ─── 全局路径 ──────────────────────────────────────────────────────────────
-BASE_DIR = r"C:\DML_fresh_start\数据存储"
-X_PARQUET = os.path.join(BASE_DIR, "X_features_new.parquet")
-Y_CSV = os.path.join(BASE_DIR, "y_target_new.csv")
-VAR_CSV = (r"C:\DML_fresh_start\数据预处理\数据与处理结果-分阶段-去共线性后"
-           r"\non_collinear_representative_vars_annotated.csv")
+# ─── 全局路径（相对于仓库根目录） ──────────────────────────────────────────
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 数据目录：data/ 下按产线拆分的建模宽表（X 特征 + Y 品位已合并）
+DATA_DIR = os.path.join(_REPO_ROOT, "data")
+
+# 变量注释 Markdown（包含 Stage_ID 信息）
+VAR_MD = os.path.join(
+    _REPO_ROOT,
+    "数据预处理",
+    "数据与处理结果-分阶段-去共线性后",
+    "non_collinear_representative_vars_annotated.md",
+)
 
 # 产线 -> Y列名映射
 LINE_TO_Y_COL = {
@@ -42,6 +50,62 @@ LINE_TO_GROUPS = {
     "xin2": {"B", "C"},
 }
 
+# 非特征列（Y 目标列），从 X 特征中排除
+_Y_COLS = {"y_fx_xin1", "y_fx_xin2"}
+
+
+def _infer_group(var_name: str) -> str:
+    """
+    根据变量命名规则推断产线归属（Group）。
+
+    规则（来自专家知识文档）：
+      - 名称中含 'X1'（新1系列浮选机）→ Group A
+      - 名称中含 'X2'（新2系列浮选机）→ Group B
+      - 其余                           → Group C（全厂公用）
+
+    该规则覆盖浮选区 Stage 6 的主要产线专线设备，
+    磨磁（MC1/MC2）和公用辅助（Stage 0/1）默认归为 Group C。
+    """
+    upper = var_name.upper()
+    if re.search(r'FX_X1', upper):
+        return "A"
+    if re.search(r'FX_X2', upper):
+        return "B"
+    return "C"
+
+
+def _parse_var_stage_from_md(md_path: str) -> dict:
+    """
+    解析变量注释 Markdown 文件，提取 {变量名: Stage_ID} 映射。
+
+    文件格式示例：
+      ## Stage 6 - 浮选网络
+      | # | 变量名 | ... |
+      | 1 | FX_X1CX1_AI7 | ... |
+
+    返回：{变量名: stage_str}，stage_str 为字符串形式（如 '0', '6'）。
+    """
+    if not os.path.exists(md_path):
+        print(f"  [警告] 变量注释 Markdown 文件不存在: {md_path}")
+        return {}
+
+    with open(md_path, encoding="utf-8", errors="replace") as f:
+        content = f.read()
+
+    var_to_stage = {}
+    # 按 "## Stage N" 章节切分
+    sections = re.split(r'## Stage (\S+)', content)
+    i = 1
+    while i + 1 < len(sections):
+        stage = sections[i].split()[0]  # 取第一个词，去掉后面的 "-"
+        body = sections[i + 1]
+        # 匹配表格行中的变量名（第2列，可能带反引号）
+        for m in re.finditer(r'\|\s*\d+\s*\|\s*`?(\S+?)`?\s*\|', body):
+            var_to_stage[m.group(1)] = stage
+        i += 2
+
+    return var_to_stage
+
 
 def load_vars_and_stages(line: str):
     """
@@ -49,36 +113,33 @@ def load_vars_and_stages(line: str):
       - var_to_stage: {变量名: Stage_ID}
       - var_to_group: {变量名: Group}
       - valid_vars: 过滤后有序变量列表
-    
-    过滤规则:
-      1. Keep_Remove == 'keep'
-      2. Group 属于该产线允许的集合
-      3. change_status 为 'Active'（排除 Dead/LowChange 死变量）
-         注意: 化验指标变量 change_status='Unknown'，一律保留（这些是关键领域知识变量）
+
+    数据来源（新格式）：
+      1. 从 non_collinear_representative_vars_annotated.md 解析 Stage 信息
+      2. 根据变量命名规则推断 Group（A/B/C）
+      3. 按产线允许的 Group 集合过滤变量
     """
-    df = pd.read_csv(VAR_CSV)
-    
+    var_to_stage_all = _parse_var_stage_from_md(VAR_MD)
+
     allowed_groups = LINE_TO_GROUPS[line]
-    
-    mask = (
-        (df["Keep_Remove"] == "keep") &
-        (df["Group"].isin(allowed_groups)) &
-        (
-            (df["change_status"] == "Active") |
-            (df["change_status"] == "Unknown")  # 化验/质检类变量没有 SCADA change_status
-        )
-    )
-    df_filtered = df[mask].copy()
-    
-    var_to_stage = dict(zip(df_filtered["Variable_Name"], df_filtered["Stage_ID"]))
-    var_to_group = dict(zip(df_filtered["Variable_Name"], df_filtered["Group"]))
-    valid_vars = df_filtered["Variable_Name"].tolist()
-    
+
+    var_to_stage = {}
+    var_to_group = {}
+    valid_vars = []
+
+    # 保持 Markdown 中的原始顺序
+    for var, stage in var_to_stage_all.items():
+        group = _infer_group(var)
+        if group in allowed_groups:
+            var_to_stage[var] = stage
+            var_to_group[var] = group
+            valid_vars.append(var)
+
     print(f"  [产线={line}] 过滤后变量数: {len(valid_vars)} "
           f"(A:{sum(1 for v in valid_vars if var_to_group[v]=='A')}, "
           f"B:{sum(1 for v in valid_vars if var_to_group[v]=='B')}, "
           f"C:{sum(1 for v in valid_vars if var_to_group[v]=='C')})")
-    
+
     return var_to_stage, var_to_group, valid_vars
 
 
@@ -144,7 +205,11 @@ def can_cause(stage_src, stage_dst, group_src=None, group_dst=None, line=None):
 def prepare_data(line: str, resample_freq: str = "10min"):
     """
     载入并对齐 X 特征和 Y 目标，按产线过滤变量。
-    
+
+    新数据格式：X 特征与 Y 品位已合并到产线级建模宽表
+    （data/modeling_dataset_{line}_final.parquet），直接读取即可，
+    无需额外的重采样或时间对齐。
+
     返回:
       df: 包含所有特征列和 'y_grade' 列的 DataFrame
       X_cols: 特征列名列表（不包含 y_grade）
@@ -153,31 +218,41 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     """
     var_to_stage, var_to_group, valid_vars = load_vars_and_stages(line)
     y_col = LINE_TO_Y_COL[line]
-    
-    X = pd.read_parquet(X_PARQUET)
-    X.index = pd.to_datetime(X.index).tz_localize(None)
-    
-    y_df = pd.read_csv(Y_CSV, parse_dates=["time"])
-    y_df["time"] = pd.to_datetime(y_df["time"]).dt.tz_localize(None)
-    y_df = y_df.dropna(subset=[y_col])
-    
-    # 只保留在 valid_vars 中且实际存在于 X 的列
-    X_cols = [c for c in valid_vars if c in X.columns]
-    missing = [c for c in valid_vars if c not in X.columns]
+
+    # 加载产线建模宽表（X + Y 已合并，行为 Y 非 NaN 的时间点）
+    dataset_path = os.path.join(DATA_DIR, f"modeling_dataset_{line}_final.parquet")
+    if not os.path.exists(dataset_path):
+        raise FileNotFoundError(
+            f"找不到产线建模数据集: {dataset_path}\n"
+            f"请先运行 data_processing/merge_final.py --line {line}"
+        )
+
+    df_raw = pd.read_parquet(dataset_path)
+    df_raw.index = pd.to_datetime(df_raw.index).tz_localize(None)
+
+    # 只保留在 valid_vars 中且实际存在于数据集的特征列
+    X_cols = [c for c in valid_vars if c in df_raw.columns]
+    missing = [c for c in valid_vars if c not in df_raw.columns]
     if missing:
-        print(f"  [警告] {len(missing)} 个变量不在 X 特征文件中，将跳过: {missing[:5]}...")
-    
-    X_re = X[X_cols].resample(resample_freq).mean().ffill().bfill()
-    y_re = y_df.set_index("time")[y_col].resample(resample_freq).mean().interpolate()
-    
-    common_idx = X_re.index.intersection(y_re.index)
-    df = pd.concat([X_re.loc[common_idx], y_re.loc[common_idx].rename("y_grade")],
-                   axis=1).dropna()
-    
-    # 更新 X_cols 只含实际存在的列
-    X_cols = [c for c in X_cols if c in df.columns]
-    
+        print(f"  [警告] {len(missing)} 个变量不在建模数据集中，将跳过: {missing[:5]}...")
+
+    # 确认 Y 列存在
+    if y_col not in df_raw.columns:
+        raise KeyError(
+            f"建模数据集中没有 Y 列 '{y_col}'，请检查 data_processing/merge_final.py 的输出。"
+        )
+
+    # 构建输出 DataFrame：选取 X 特征列 + Y 列（重命名为 y_grade）
+    df = df_raw[X_cols].copy()
+    df["y_grade"] = df_raw[y_col].values
+    df = df.dropna(subset=["y_grade"])
+
+    # 更新 var_to_stage / var_to_group，只保留实际存在的特征
+    X_cols_set = set(X_cols)
+    var_to_stage = {v: s for v, s in var_to_stage.items() if v in X_cols_set}
+    var_to_group = {v: g for v, g in var_to_group.items() if v in X_cols_set}
+
     print(f"  [产线={line}] 数据集: {len(df)} 行 x {len(df.columns)} 列, "
           f"Y={y_col}, 时间范围: {df.index.min()} ~ {df.index.max()}")
-    
+
     return df, X_cols, var_to_stage, var_to_group
