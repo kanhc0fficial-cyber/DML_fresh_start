@@ -35,6 +35,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_RESULTS_DIR = os.path.join(BASE_DIR, "DML理论验证")
 DEFAULT_OUTPUT_DIR = os.path.join(BASE_DIR, "评估报告")
 
+# ─── 常量 ─────────────────────────────────────────────────────────
+EPSILON = 1e-12  # 数值稳定性常数，防止除零
+SLOPE_TOLERANCE = 0.3  # √n 一致性斜率容差：|slope + 0.5| < 此值视为接近理论值
+SHAPIRO_MAX_N = 5000  # Shapiro-Wilk 样本上限（过大样本对微小偏差过于敏感）
+
 
 # ══════════════════════════════════════════════════════════════════
 #  1. 数据加载
@@ -150,15 +155,14 @@ def compute_method_summary(df: pd.DataFrame) -> pd.DataFrame:
         coverage = float(np.mean(covers))
 
         # SE 校准比：mean(SE) / std(theta)，理想值 ≈ 1.0
-        se_calibration = mean_se / (std_theta + 1e-12) if not np.isnan(mean_se) else np.nan
+        se_calibration = mean_se / (std_theta + EPSILON) if not np.isnan(mean_se) else np.nan
 
         # 正态性检验（Shapiro-Wilk on standardized bias）
         p_normal = np.nan
-        if n_exp >= 20 and std_theta > 1e-12:
+        if n_exp >= 20 and std_theta > EPSILON:
             z_scores = biases / std_theta
             try:
-                # Shapiro-Wilk 限制在 5000 样本以内
-                _, p_normal = stats.shapiro(z_scores[:min(n_exp, 5000)])
+                _, p_normal = stats.shapiro(z_scores[:min(n_exp, SHAPIRO_MAX_N)])
             except Exception:
                 pass
 
@@ -212,7 +216,8 @@ def pairwise_comparisons(df: pd.DataFrame) -> pd.DataFrame:
             abs_bias_a = np.abs(df_a.loc[common_seeds, "bias"].values)
             abs_bias_b = np.abs(df_b.loc[common_seeds, "bias"].values)
 
-            diff = abs_bias_a - abs_bias_b  # >0 means B is better
+            # diff > 0 means abs_bias_a > abs_bias_b, so B is better (lower absolute bias)
+            diff = abs_bias_a - abs_bias_b
             try:
                 stat, p_val = stats.wilcoxon(diff, alternative="two-sided")
             except Exception:
@@ -267,7 +272,7 @@ def compare_consistency(df_cons: pd.DataFrame) -> pd.DataFrame:
             "slope": round(slope, 4),
             "intercept": round(intercept, 4),
             "R2": round(r_val ** 2, 4),
-            "close_to_minus0.5": abs(slope + 0.5) < 0.3,
+            "close_to_minus0.5": abs(slope + 0.5) < SLOPE_TOLERANCE,
         })
     return pd.DataFrame(rows)
 
@@ -367,7 +372,7 @@ def generate_report(results_dir: str, output_dir: str):
             f.write("-" * 60 + "\n")
             f.write(df_pairs.to_string(index=False) + "\n")
             # 标注显著结果
-            sig_pairs = df_pairs[df_pairs["significant_0.05"] == True]
+            sig_pairs = df_pairs[df_pairs["significant_0.05"].fillna(False)]
             if not sig_pairs.empty:
                 f.write("\n  显著差异对:\n")
                 for _, row in sig_pairs.iterrows():
