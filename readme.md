@@ -242,6 +242,18 @@ DML_fresh_start/
 | 脚本 | 功能 |
 |------|------|
 | `check_progress.py` | 检查 DML 理论验证实验进度（读取 `DML理论验证/` 下的 CSV/JSON） |
+| `evaluate_highdim_results.py` | **统一评估与横向对比**：读取 v1~v5 蒙特卡洛结果 CSV，生成跨方法对比报告 |
+
+### 6.4 `evaluate_highdim_results.py` — 统一评估脚本
+
+| 项 | 说明 |
+|----|------|
+| **输入** | `反驳性实验/DML理论验证/` 下所有蒙特卡洛结果 CSV（highdim_*.csv / monte_carlo_*.csv） |
+| **输出** | `反驳性实验/评估报告/` 下：method_summary.csv + pairwise_tests.csv + consistency_comparison.csv + evaluation_report.txt |
+| **功能** | 1. 跨方法横向对比（RMSE/Coverage/SE校准/正态性检验）<br>2. 成对统计检验（paired Wilcoxon signed-rank test，检验 v3 vs v4 差异显著性）<br>3. √n 一致性收敛斜率横向对比<br>4. 自动标记最优方法和 SE 校准异常 |
+| **运行** | `python 反驳性实验/evaluate_highdim_results.py` |
+
+> 使用方式：先运行各 `run_dml_theory_validation_highdim_*.py --mode full`，再执行评估脚本。支持 `--results_dir` 和 `--output_dir` 参数自定义路径。
 
 ---
 
@@ -309,6 +321,15 @@ DML_fresh_start/
 | **运行** | `python 反驳性实验/run_dml_theory_validation.py --mode all` |
 
 > 支持模式：`quick` (快速验证) / `full` (200 次蒙特卡洛) / `consistency` (不同 n) / `confounding` (混杂对比) / `all`
+
+### S-3.2 `evaluate_highdim_results.py` — 统一评估与横向对比
+
+| 项 | 说明 |
+|----|------|
+| **输入** | `反驳性实验/DML理论验证/` 下蒙特卡洛结果 CSV（v1~v5 全部） |
+| **输出** | `反驳性实验/评估报告/` 下：method_summary.csv、pairwise_tests.csv、consistency_comparison.csv、evaluation_report.txt |
+| **功能** | 跨方法横向对比 + paired Wilcoxon 检验 + SE 校准诊断 + 正态性检验 + √n 一致性对比 |
+| **运行** | `python 反驳性实验/evaluate_highdim_results.py` |
 
 ---
 
@@ -405,6 +426,9 @@ python 因果的发现算法理论验证/tune_multiscale_nts.py --n_trials 5
 
 # DML 理论验证
 python 反驳性实验/run_dml_theory_validation.py --mode all
+
+# 统一评估（跨方法横向对比 + 统计检验）
+python 反驳性实验/evaluate_highdim_results.py
 ```
 
 ---
