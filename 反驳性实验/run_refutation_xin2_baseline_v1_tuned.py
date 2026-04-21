@@ -121,16 +121,16 @@ K_FOLDS                    = 4    # 交叉拟合折数
 N_BOOTSTRAP                = 5    # Bootstrap 重复次数
 MIN_TRAIN_SIZE             = 100
 MIN_VALID_RESIDUALS        = 40
-F_STAT_THRESHOLD           = 6.0
+F_STAT_THRESHOLD           = 6.0   # 从原始 10 放宽到 6，给弱但非纯噪声的处理变量留出诊断空间
 MIN_BOOTSTRAP_SUCCESS_RATE = 0.40
-SAFE_X_MAX_COUNT           = 40
+SAFE_X_MAX_COUNT           = 40    # 对 RF 保留较宽控制集，避免像深度模型那样过度裁剪
 CV_WARN                    = 0.30  # CV 超过此值视为不稳定
 SIGN_RATE_MIN              = 0.70  # 符号一致率低于此值视为不可信
 
 # ── RF 超参 ────────────────────────────────────────────────────────
 RF_N_ESTIMATORS     = 200
-RF_MAX_DEPTH        = 4      # 更浅的树提升小样本稳健性
-RF_MIN_SAMPLES_LEAF = 10     # 进一步防止过拟合
+RF_MAX_DEPTH        = 4      # 保守默认值；XIN2 小样本/高维下优先稳健性，可用 --rf_max_depth 覆盖
+RF_MIN_SAMPLES_LEAF = 10     # 对 1900 左右样本量偏保守，减少叶节点碎片化，可按数据量下调
 RF_MAX_FEATURES     = 0.5    # 降低单棵树对高维控制变量的敏感性
 
 
