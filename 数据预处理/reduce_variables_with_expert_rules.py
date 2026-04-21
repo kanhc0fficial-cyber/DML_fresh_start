@@ -1,21 +1,33 @@
 """
-专家知识驱动的"聚合优先"降维脚本（v3）。
+专家知识驱动的"聚合优先 + 专家删除"降维脚本（v4）。
 
 核心原则：
 1. 以 non_collinear_representative_vars_operability.csv 中的 470 个代表变量为基础，
    全部默认直通保留（keep_individual）。
 2. 仅对真正并联的同类设备变量做显式聚合（aggregate）：
    - 所有聚合组均使用精确变量名列表，不做任何正则或文字匹配。
-   - 主要聚合对象：20 台强磁机（MC2_QC501-QC610，115 个代表变量 → 12 个概念特征）、
-     6 台塔磨主电机及温度（MC1_TM*）、12 台三旋给矿泵（MC1_GKB*）等。
-3. 不设置占位列——确实没有源变量的概念直接跳过。
-4. 对每个代表变量均有明确的处置决定（aggregate / keep_individual）记录在分析 CSV 中。
+   - 聚合方法：全部为 mean（均值），不是简单相加（sum）。
+     均值适合并联运行的同类设备——代表全区平均运行水平；
+     sum 适合质量守恒/总量计算，不适合 DML 控制状态表征。
+3. 专家删除层（≤100 个变量）：参考《东鞍山烧结厂选矿专家知识》确定的观测/控制空间，
+   删除以下 8 类信号（所有列表均为精确变量名，无字符匹配）：
+   - Cat-1: 无法识别身份的变量（全数据源均无描述）
+   - Cat-2: 变压器/鼓风机电能计量表（专家观测空间不包含）
+   - Cat-3: 控制限/报警信号（非状态量，不适合 DML）
+   - Cat-4: 浮选机单机电流/电压（专家观测空间中用气量和阀位表征，机器电流冗余）
+   - Cat-5: 离心鼓风机电流/频率/进口温度（专家观测空间中用出口压力表征）
+   - Cat-6: 浓缩机/磁选机机械监测（提耙/落耙/挂泥扭矩，专家观测空间不包含）
+   - Cat-7: 尾矿/精矿/事故/溢流/无名渣浆泵次要电流信号
+   - Cat-8: 已保留代表信号的同名泵重复电流/频率
+4. 不设置占位列——确实没有源变量的概念直接跳过。
+5. 对每个代表变量均有明确的处置决定（aggregate / keep_individual / drop）记录在分析 CSV 中。
 
 旋流器开关状态说明（2026-04）：
-  经穷举检索，当前 modeling_dataset_final.parquet 中不存在任何"旋流器开关状态"类列。
-  ABC 元数据中 204 个 _ZT 变量均为浮选药剂阀、鼓风机阀、分配器阀等，无一与旋流器开关相关。
-  MC1 塔磨旋流器相关变量不在 parquet 中的是：泵频给定（_AO）、PID 参数（_P/_I）、阀位设定（_SP）、浓度计（_DE）。
-  若实际 DCS 中存在此信号，需从未接入当前数据集的子系统补充。
+  专家知识文档第97段明确将"各并联旋流器进料阀的开关状态"列为塔磨区观测空间。
+  但经穷举检索，当前所有可用数据集（modeling_dataset_final.parquet + 所有 ABC 元数据 CSV）
+  均不包含此信号。ABC 元数据的 204 个 _ZT 变量全为浮选药剂阀/鼓风机阀/分配器阀，
+  MC1 塔磨区 ABC 元数据中亦无任何 _ZT / _KG / 开关状态列。
+  这是一个数据采集缺口，需要从未接入当前数据管道的 DCS 子系统补充后重新处理。
 """
 
 from __future__ import annotations
@@ -364,12 +376,211 @@ def define_parallel_groups() -> list[AggGroup]:
     return groups
 
 
+MAX_DELETIONS = 100  # 硬性上限：不允许删除超过此数量的代表变量
+
+
+def define_deletion_rules() -> list[dict]:
+    """
+    定义专家删除规则。
+
+    基于《东鞍山烧结厂选矿专家知识》确定的各工艺段观测/控制空间，
+    删除 8 类与工艺无关或冗余的信号。所有列表均为精确变量名，无字符匹配。
+    总删除数 ≤ MAX_DELETIONS。
+
+    返回值：list of dict，每条格式：
+        {"vars": [str, ...], "category": str, "reason_cn": str}
+    """
+    rules: list[dict] = []
+
+    def r(category: str, reason_cn: str, vars_list: list[str]) -> None:
+        rules.append({"category": category, "reason_cn": reason_cn, "vars": vars_list})
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-1: 无法识别身份的变量（35 个）
+    # 在所有元数据源（ABC 分类合集、可用变量合集、whitelist）中均无 COMMENT/描述，
+    # 且分析 CSV 中描述也为空。无法确定其物理含义，不能在 DML 模型中使用。
+    # 注：这些变量在 parquet 中有数值，但含义未知。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-1: 身份未知变量",
+      "在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。",
+      [
+          "FX_HV_621B_AI", "FX_TT_621C1", "FX_LT_621B", "FX_TT_621B2",
+          "FX_FT_622A", "FX_FT_622B", "FX_FT_622C", "FX_FT_622D",
+          "FX_TT_631B", "FX_LT_621C", "FX_LT_621D",
+          "FX_FT_622E", "FX_FT_622F", "FX_FT_622G", "FX_FT_622H",
+          "FX_TV_621A_AI", "FX_TV_621B_AI", "FX_TV_621C_AI", "FX_TV_621D_AI",
+          "FX_HV_621A_AI", "FX_HV_621C_AI", "FX_HV_621D_AI",
+          "FX_FT_642A", "FX_LT_641A", "FX_FT_642B", "FX_FT_642C", "FX_FT_642D",
+          "FX_FT_612F", "FX_FT_612C", "FX_FT_612D", "FX_FT_612E",
+          "FX_FT_612G", "FX_FT_612H",
+          "FX_FT_622E_SP", "FX_FT_622A_LJ",
+      ])  # 35 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-2: 电能计量表（变压器/鼓风机有功功率/无功功率/功率因素）（13 个）
+    # 专家知识文档磁选段（§80-81）及塔磨段（§97-98）均未将变压器/变频器电能指标
+    # 列入模型观测空间，它们反映电力消耗而非工艺状态，对矿产品品位无直接解释力。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-2: 电能计量表",
+      "专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。"
+      "这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。",
+      [
+          "FX_AH7_AI6",    # 浮选2#低压室1#变压器总瞬时无功功率
+          "FX_AH9_AI6",    # 浮选3#低压室1#变压器总瞬时有功功率
+          "FX_AH10_AI6",   # 浮选3#低压室2#变压器总瞬时有功功率
+          "FX_AH12_AI6",   # 浮选4#鼓风机变频总瞬时有功功率
+          "FX_AH14_AI7",   # 浮选5#鼓风机变频总瞬时无功功率
+          "FX_AH16_AI5",   # 浮选6#鼓风机变频总功率因素
+          "FX_AH16_AI6",   # 浮选6#鼓风机变频总瞬时有功功率
+          "MC1_AH6_AI6",   # 磨磁3#配电室2#变压器总瞬时有功功率
+          "MC1_AH8_AI5",   # 磨磁2#配电室2#变压器总功率因素
+          "MC1_AH9_AI4",   # 磨磁3#配电室1#变压器电网频率
+          "MC1_AH10_AI5",  # 磨磁1#配电室2#变压器总功率因素
+          "MC1_AH12_AI5",  # 磨磁6#塔磨机总功率因素
+          "MC1_AH12_AI7",  # 磨磁6#塔磨机总瞬时无功功率
+      ])  # 13 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-3: 控制限/报警信号（2 个）
+    # 报警/控制限是基于实测液位的二次派生量（阈值判断），不是独立状态。
+    # 纳入 DML 会引入人工阈值造成的非线性跳变。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-3: 控制限/报警信号",
+      "报警信号（_BJ）和控制上限（_HSV）是实测值的阈值派生量，非独立工艺状态，会在 DML 残差中引入人工非线性。",
+      [
+          "FX_LT_1602_BJ",   # 一系列粗选泡沫及二扫底流泵池液位报警
+          "FX_LT_1601_HSV",  # 一系列粗选给矿泵池液位控制上限
+      ])  # 2 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-4: 浮选机单机电流/电压（Group C，14 个）
+    # 专家知识文档浮选段（§80/118/119）的观测空间为：矿浆液位、气量、泡沫厚度、药剂量；
+    # 控制空间为：阀门开度、充气量。单机电流仅表明电机有无卡停，不在专家控制模型中。
+    # 注：FX_FXJ803_I（扫选三803，Group A）留存，其余 Group C 单机电流全部删除。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-4: 浮选机单机电流/电压（Group C）",
+      "专家知识文档浮选段观测空间不包含浮选机电机电流/电压。"
+      "电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。"
+      "气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。",
+      [
+          "FX_FXJ401_I", "FX_FXJ401_U",  # 粗选401电流/电压
+          "FX_FXJ402_I",                   # 粗选402电流
+          "FX_FXJ407_I",                   # 粗选407电流
+          "FX_FXJ410_I",                   # 粗选410电流
+          "FX_FXJ504_I",                   # 精选504电流
+          "FX_FXJ601_I", "FX_FXJ602_I", "FX_FXJ603_I",
+          "FX_FXJ604_I", "FX_FXJ605_I",   # 扫选一601-605电流
+          "FX_FXJ701_I",                   # 扫选二701电流
+          "FX_FXJ801_I", "FX_FXJ802_I",   # 扫选三801/802电流
+      ])  # 14 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-5: 离心鼓风机电流/频率/进口温度（Group C，9 个）
+    # 专家知识文档浮选段（§119）的充气量通过浮选槽气量实测值（FX_X*_AI5）已经捕获；
+    # 鼓风机本身的电流/频率/进口温度是机械健康监测，不在工艺控制观测空间。
+    # 保留 FX_PT_901_CK, FX_PT_902_CK（出口压力为气网边界条件）。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-5: 离心鼓风机电流/频率/进口温度（Group C）",
+      "鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；"
+      "电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。"
+      "保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。",
+      [
+          "FX_GFJ901_I", "FX_GFJ902_F",   # 鼓风机901/902电流/频率
+          "FX_GFJ903_I", "FX_GFJ904_I",   # 鼓风机903/904电流
+          "FX_GFJ905_I", "FX_GFJ906_F",   # 鼓风机905/906电流/频率
+          "FX_TT_901_JK", "FX_TT_902_JK", "FX_TT_906_JK",  # 鼓风机进口温度
+      ])  # 9 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-6: 浓缩机/磁选机机械监测信号（Group C，4 个）
+    # 提耙/落耙压力和挂泥电机扭矩是设备健康监测（防止设备损坏），
+    # 不在专家知识文档任何工艺段的观测或控制空间中，对产品品位无解释力。
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-6: 浓缩机/磁选机机械监测",
+      "提耙压力、落耙压力、挂泥电机扭矩为设备健康监测量，"
+      "专家知识文档未将其列入磁选/浓缩段的观测或控制空间，对矿石品位无直接影响。",
+      [
+          "MC2_NSJ_TPYL_AI",   # 提耙压力
+          "MC2_NSJ_LPYL_AI",   # 落耙压力
+          "MC2_CQC_GNJNJ_AI",  # 磁选机挂泥电机扭矩
+          "FX_P1_N2_I",        # 4#Φ30m浮选前浓缩机N2电流（冗余于FX_P2_N1_I/FX_P3_N2_I）
+      ])  # 4 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-7: 渣浆泵次要电流信号（Group C，18 个）
+    # 尾矿泵：保留 FX_ZJB1601_F（频率为实际转速代理），删除 1601/1602/1603/1604_I（电流冗余）
+    # 精矿泵：保留 FX_ZJB1401_F，删除 1401_I/1402_I/1404_F/1404_I
+    # 事故泵：应急设备，正常生产不运行，删除全部 4 个
+    # 溢流泵：已有 MC2_YLB* 代表变量（agg_tm_overflow_pump_current），删除 FX 侧 2 个
+    # 无名渣浆泵：无业务含义可追溯，删除 4 个
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-7: 渣浆泵次要电流信号（Group C）",
+      "尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；"
+      "事故泵属应急设备（正常生产不运行）；"
+      "无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。",
+      [
+          # 事故泵（全部删除，应急设备）
+          "FX_ZJB1502_F", "FX_ZJB1502_I", "FX_ZJB1504_F", "FX_ZJB1504_I",
+          # 精矿泵：保留 1401_F，删除冗余
+          "FX_ZJB1401_I", "FX_ZJB1402_I", "FX_ZJB1404_F", "FX_ZJB1404_I",
+          # 尾矿泵：保留 1601_F，删除冗余电流
+          "FX_ZJB1601_I", "FX_ZJB1602_I", "FX_ZJB1603_I", "FX_ZJB1604_I",
+          # 溢流泵（已有 MC2_YLB 聚合概念覆盖）
+          "FX_ZJB3002_I", "FX_ZJB3004_I",
+          # 无名渣浆泵（无可追溯身份）
+          "FX_ZJB33_F", "FX_ZJB33_I", "FX_ZJB34_I", "FX_ZJB41_I",
+      ])  # 18 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Cat-8: 已有代表信号的同名泵重复电流/频率（Group C，5 个）
+    # 一扫给矿泵：FX_ZJB1201_F+I（Group A）已保留，1203/1204 为重复
+    # 二扫给矿泵：FX_ZJB1303_F+I（Group A）已保留，1301/1302 为重复
+    # ──────────────────────────────────────────────────────────────────────────
+    r("Cat-8: 与 Group A 代表信号重复的同名泵信号",
+      "同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），"
+      "1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。",
+      [
+          "FX_ZJB1203_I", "FX_ZJB1204_F", "FX_ZJB1204_I",  # 一扫给矿泵重复
+          "FX_ZJB1301_I", "FX_ZJB1302_I",                   # 二扫给矿泵重复
+      ])  # 5 vars
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 统计并验证总删除数
+    # ──────────────────────────────────────────────────────────────────────────
+    total = sum(len(r_["vars"]) for r_ in rules)
+    assert total <= MAX_DELETIONS, (
+        f"删除变量总数 {total} 超过上限 {MAX_DELETIONS}！请检查删除规则。"
+    )
+
+    return rules
+
+
+def build_deletion_set(rules: list[dict], rep_set: set[str]) -> tuple[dict[str, dict], int]:
+    """
+    从删除规则中构建 {var_name -> {category, reason}} 字典。
+    同时验证每个待删变量确实在代表变量集中。
+    返回 (deletion_map, total_count)。
+    """
+    deletion_map: dict[str, dict] = {}
+    for rule in rules:
+        for v in rule["vars"]:
+            if v not in rep_set:
+                raise ValueError(
+                    f"删除规则 [{rule['category']}] 中的变量 {v!r} 不在代表变量集中，请核查。"
+                )
+            if v in deletion_map:
+                raise ValueError(f"变量 {v!r} 被多条删除规则重复引用。")
+            deletion_map[v] = {"category": rule["category"], "reason_cn": rule["reason_cn"]}
+    return deletion_map, len(deletion_map)
+
+
 def build_analysis_df(
     rep_vars: list[str],
     agg_groups: list[AggGroup],
     rep_var_meta: dict[str, dict[str, str]],
+    deletion_map: dict[str, dict],
 ) -> pd.DataFrame:
-    """为 470 个代表变量生成逐一处置分析表。"""
+    """为 470 个代表变量生成逐一处置分析表（aggregate / keep_individual / drop）。"""
     var_to_group: dict[str, AggGroup] = {}
     for grp in agg_groups:
         for v in grp.source_vars:
@@ -388,6 +599,14 @@ def build_analysis_df(
             process = grp.process
             role = grp.role
             reason = grp.reason
+        elif v in deletion_map:
+            del_info = deletion_map[v]
+            action = "drop"
+            target = "(deleted)"
+            method = "none"
+            process = meta.get("process", "")
+            role = meta.get("Description_CN", "")
+            reason = f"[{del_info['category']}] {del_info['reason_cn']}"
         else:
             action = "keep_individual"
             target = v
@@ -438,15 +657,29 @@ def render_report(
     action_counts = analysis_df["Action"].value_counts().to_dict()
     n_agg_groups = len(concept_df)
     n_agg_vars = int(action_counts.get("aggregate", 0))
+    n_drop = int(action_counts.get("drop", 0))
     n_keep = int(action_counts.get("keep_individual", 0))
 
+    # Deletion breakdown by category
+    drop_rows = analysis_df[analysis_df["Action"] == "drop"].copy()
+    cat_counts = (
+        drop_rows["Reason"]
+        .str.extract(r"^\[([^\]]+)\]")[0]
+        .value_counts()
+        .to_dict()
+    )
+
     lines = [
-        "# 专家知识驱动的聚合优先降维报告（v3）",
+        "# 专家知识驱动的聚合优先 + 专家删除降维报告（v4）",
         "",
         "## 策略",
         "",
         "- 以 470 个代表变量为基础，全部默认直通。",
         "- 仅对确认为并联同类设备的变量做聚合，聚合组由精确变量名列表定义，不依赖正则或文字匹配。",
+        "- **聚合方法：全部为 mean（均值）**，不是简单相加（sum）。",
+        "  均值适合并联运行同类设备状态表征（DML 控制建模）；sum 适合质量守恒/总量计算，此处不适用。",
+        "- 专家删除层：参考《东鞍山烧结厂选矿专家知识》各工艺段观测/控制空间，",
+        "  删除 8 类与控制无关或冗余的信号，总删除 ≤ 100 个，所有列表精确变量名，无字符匹配。",
         "- 不设占位列：没有源数据的概念直接忽略。",
         "",
         "## 输入输出",
@@ -456,21 +689,34 @@ def render_report(
         f"- 输出 shape：**{reduced_df.shape}**",
         f"- 代表变量总数：470",
         f"- 参与聚合的变量数：{n_agg_vars}（合并为 {n_agg_groups} 个概念特征）",
+        f"- 专家删除的变量数：**{n_drop}**（保守删除，≤ {MAX_DELETIONS}）",
         f"- 直通保留的变量数：{n_keep}",
+        "",
+        "### 删除变量按类别统计",
+        "",
+        "| 类别 | 删除数 |",
+        "|---|---:|",
+    ]
+    for cat, cnt in sorted(cat_counts.items()):
+        lines.append(f"| {cat} | {cnt} |")
+    lines.append(f"| **合计** | **{n_drop}** |")
+
+    lines.extend([
         "",
         "## 关于旋流器开关状态",
         "",
-        "经穷举检索（2026-04），当前 `modeling_dataset_final.parquet` 中不存在任何旋流器开关状态列。",
-        "ABC 元数据中 204 个 `_ZT` 变量均为浮选药剂阀/鼓风机阀/分配器阀，无旋流器开关。",
-        "若实际 DCS 存在该信号，需从未接入当前数据集的子系统补充数据后重新处理。",
+        "专家知识文档第 97 段明确将『各并联旋流器进料阀的开关状态』列为塔磨区观测空间。",
+        "但经穷举检索（2026-04），当前所有可用数据集及 ABC 元数据均不包含此信号。",
+        "ABC 元数据的 204 个 `_ZT` 变量全为浮选药剂阀/鼓风机阀/分配器阀，MC1 塔磨区无任何 _ZT 列。",
+        "**这是数据采集缺口，需从未接入当前数据管道的 DCS 子系统补充后重新处理。**",
         "",
         "## 聚合概念表",
         "",
-        f"共 **{n_agg_groups}** 个聚合概念，{n_agg_vars} 个代表变量参与聚合。",
+        f"共 **{n_agg_groups}** 个聚合概念，{n_agg_vars} 个代表变量参与聚合，全部使用 **mean** 方法。",
         "",
         "| 特征名 | 中文名 | 工艺段 | 角色 | 方法 | 源变量数 | 可用数 |",
         "|---|---|---|---|---|---:|---:|",
-    ]
+    ])
     for _, row in concept_df.iterrows():
         lines.append(
             f"| `{row['feature_name']}` | {row['feature_cn']} | {row['process']} | {row['role']} | "
@@ -548,14 +794,32 @@ def main() -> None:
                     "请核实变量名后重新运行。"
                 )
 
-    # 确定哪些变量参与聚合
+    # 定义专家删除规则（精确变量名，无字符匹配，≤ MAX_DELETIONS）
+    deletion_rules = define_deletion_rules()
+    deletion_map, n_deletions = build_deletion_set(deletion_rules, rep_set)
+
+    # 确定哪些变量参与聚合 / 被删除 / 直通保留
     vars_in_agg: set[str] = {v for grp in agg_groups for v in grp.source_vars}
+
+    # 不允许同一变量既在聚合组又在删除列表（聚合变量已经不在直通列表，删除对其无意义）
+    overlap = vars_in_agg & set(deletion_map.keys())
+    if overlap:
+        raise ValueError(
+            f"以下变量同时出现在聚合组和删除规则中，请检查：{sorted(overlap)}"
+        )
+
+    print(f"[INFO] 代表变量总数: {len(rep_vars)}")
+    print(f"[INFO] 参与聚合: {len(vars_in_agg)} → {len(agg_groups)} 个概念特征")
+    print(f"[INFO] 专家删除: {n_deletions}（上限 {MAX_DELETIONS}）")
 
     # 构建输出 DataFrame（用 pd.concat 避免逐列插入的碎片化 PerformanceWarning）
     parts: list[pd.DataFrame] = []
 
-    # 1. 直通保留：未参与聚合的代表变量，原样保留
-    passthrough_cols = [v for v in rep_vars if v not in vars_in_agg]
+    # 1. 直通保留：未参与聚合且未被删除的代表变量，原样保留
+    passthrough_cols = [
+        v for v in rep_vars
+        if v not in vars_in_agg and v not in deletion_map
+    ]
     # 区分在 parquet 中存在的 vs 缺失的
     existing = [v for v in passthrough_cols if v in df.columns]
     missing  = [v for v in passthrough_cols if v not in df.columns]
@@ -579,8 +843,11 @@ def main() -> None:
 
     reduced = pd.concat(parts, axis=1)
 
+    print(f"[INFO] 直通保留: {len(passthrough_cols)} 个")
+    print(f"[INFO] 输出 shape: {reduced.shape}")
+
     # 生成分析和报告
-    analysis_df = build_analysis_df(rep_vars, agg_groups, rep_var_meta)
+    analysis_df = build_analysis_df(rep_vars, agg_groups, rep_var_meta, deletion_map)
     concept_df = build_concept_df(agg_groups, df)
     report_text = render_report(analysis_df, concept_df, input_parquet, output_parquet, reduced)
 

@@ -20,7 +20,7 @@ FX_X2SX1_AI3,Ⅱ系列扫选1作业液位阀1开度实际值,B,observable,keep_i
 FX_X2SX1_AI4,Ⅱ系列扫选1作业液位阀1开度设定显示,C,observable,keep_individual,FX_X2SX1_AI4,passthrough,,Ⅱ系列扫选1作业液位阀1开度设定显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X2SX1_AI5,Ⅱ系列扫选1作业气量1实际值,C,observable,keep_individual,FX_X2SX1_AI5,passthrough,,Ⅱ系列扫选1作业气量1实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X2SX1_AI7,Ⅱ系列扫选1作业蝶阀1开度实际值,B,observable,keep_individual,FX_X2SX1_AI7,passthrough,,Ⅱ系列扫选1作业蝶阀1开度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_HV_621B_AI,,C,observable,keep_individual,FX_HV_621B_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_HV_621B_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_X2SX1_AI13,Ⅱ系列扫选1作业气量3实际值,C,observable,keep_individual,FX_X2SX1_AI13,passthrough,,Ⅱ系列扫选1作业气量3实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TV_2101_AO,二系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2101阀位给定信号,B,observable,keep_individual,FX_TV_2101_AO,passthrough,,二系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2101阀位给定信号,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X2SX1_AI38,Ⅱ系列扫选1作业电动阀开度,B,observable,keep_individual,FX_X2SX1_AI38,passthrough,,Ⅱ系列扫选1作业电动阀开度,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -32,19 +32,19 @@ FX_X2SX2_AI4,Ⅱ系列扫选2作业液位阀1开度设定显示,B,observable,kee
 FX_X2SX3_AI3,Ⅱ系列扫选3作业液位阀1开度实际值,C,observable,keep_individual,FX_X2SX3_AI3,passthrough,,Ⅱ系列扫选3作业液位阀1开度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X2SX3_AI4,Ⅱ系列扫选3作业液位阀1开度设定显示,C,observable,keep_individual,FX_X2SX3_AI4,passthrough,,Ⅱ系列扫选3作业液位阀1开度设定显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TT_2104,二系列2#-4高效搅拌槽温度,C,observable,keep_individual,FX_TT_2104,passthrough,,二系列2#-4高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ401_I,浮选机(粗选)401电流,C,observable,keep_individual,FX_FXJ401_I,passthrough,,浮选机(粗选)401电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ402_I,浮选机(粗选)402电流,C,observable,keep_individual,FX_FXJ402_I,passthrough,,浮选机(粗选)402电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ504_I,浮选机(精选)504电流,C,observable,keep_individual,FX_FXJ504_I,passthrough,,浮选机(精选)504电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ410_I,浮选机(粗选)410电流,C,observable,keep_individual,FX_FXJ410_I,passthrough,,浮选机(粗选)410电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ407_I,浮选机(粗选)407电流,C,observable,keep_individual,FX_FXJ407_I,passthrough,,浮选机(粗选)407电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ601_I,浮选机(扫选一)601电流,C,observable,keep_individual,FX_FXJ601_I,passthrough,,浮选机(扫选一)601电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ602_I,浮选机(扫选一)602电流,C,observable,keep_individual,FX_FXJ602_I,passthrough,,浮选机(扫选一)602电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ603_I,浮选机(扫选一)603电流,C,observable,keep_individual,FX_FXJ603_I,passthrough,,浮选机(扫选一)603电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ604_I,浮选机(扫选一)604电流,C,observable,keep_individual,FX_FXJ604_I,passthrough,,浮选机(扫选一)604电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ605_I,浮选机(扫选一)605电流,C,observable,keep_individual,FX_FXJ605_I,passthrough,,浮选机(扫选一)605电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ701_I,浮选机(扫选二)701电流,C,observable,keep_individual,FX_FXJ701_I,passthrough,,浮选机(扫选二)701电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ801_I,浮选机(扫选三)801电流,C,observable,keep_individual,FX_FXJ801_I,passthrough,,浮选机(扫选三)801电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ802_I,浮选机(扫选三)802电流,C,observable,keep_individual,FX_FXJ802_I,passthrough,,浮选机(扫选三)802电流,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FXJ401_I,浮选机(粗选)401电流,C,observable,drop,(deleted),none,,浮选机(粗选)401电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ402_I,浮选机(粗选)402电流,C,observable,drop,(deleted),none,,浮选机(粗选)402电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ504_I,浮选机(精选)504电流,C,observable,drop,(deleted),none,,浮选机(精选)504电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ410_I,浮选机(粗选)410电流,C,observable,drop,(deleted),none,,浮选机(粗选)410电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ407_I,浮选机(粗选)407电流,C,observable,drop,(deleted),none,,浮选机(粗选)407电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ601_I,浮选机(扫选一)601电流,C,observable,drop,(deleted),none,,浮选机(扫选一)601电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ602_I,浮选机(扫选一)602电流,C,observable,drop,(deleted),none,,浮选机(扫选一)602电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ603_I,浮选机(扫选一)603电流,C,observable,drop,(deleted),none,,浮选机(扫选一)603电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ604_I,浮选机(扫选一)604电流,C,observable,drop,(deleted),none,,浮选机(扫选一)604电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ605_I,浮选机(扫选一)605电流,C,observable,drop,(deleted),none,,浮选机(扫选一)605电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ701_I,浮选机(扫选二)701电流,C,observable,drop,(deleted),none,,浮选机(扫选二)701电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ801_I,浮选机(扫选三)801电流,C,observable,drop,(deleted),none,,浮选机(扫选三)801电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
+FX_FXJ802_I,浮选机(扫选三)802电流,C,observable,drop,(deleted),none,,浮选机(扫选三)802电流,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
 FX_X1JX_AI15,Ⅰ系列精选作业气量3设定值显示,A,observable,keep_individual,FX_X1JX_AI15,passthrough,,Ⅰ系列精选作业气量3设定值显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 MC2_PET101_AI,1#新建强磁前浓缩机底流泵出口管道压力,A,observable,keep_individual,MC2_PET101_AI,passthrough,,1#新建强磁前浓缩机底流泵出口管道压力,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1SX1_AI3,Ⅰ系列扫选1作业液位阀1开度实际值,C,observable,keep_individual,FX_X1SX1_AI3,passthrough,,Ⅰ系列扫选1作业液位阀1开度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -61,7 +61,7 @@ FX_X1SX2_AI7,Ⅰ系列扫选2作业蝶阀1开度实际值,C,observable,keep_indi
 FX_X1SX2_AI9,Ⅰ系列扫选2作业气量2实际值,A,observable,keep_individual,FX_X1SX2_AI9,passthrough,,Ⅰ系列扫选2作业气量2实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1SX2_AI12,Ⅰ系列扫选2作业蝶阀2开度设定值显示,C,observable,keep_individual,FX_X1SX2_AI12,passthrough,,Ⅰ系列扫选2作业蝶阀2开度设定值显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1SX3_AI1,Ⅰ系列扫选3作业泡沫层厚度实际值,C,observable,keep_individual,FX_X1SX3_AI1,passthrough,,Ⅰ系列扫选3作业泡沫层厚度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1301_I,渣浆泵(二扫给矿泵)1301电流反馈,C,observable,keep_individual,FX_ZJB1301_I,passthrough,,渣浆泵(二扫给矿泵)1301电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1301_I,渣浆泵(二扫给矿泵)1301电流反馈,C,observable,drop,(deleted),none,,渣浆泵(二扫给矿泵)1301电流反馈,[Cat-8: 与 Group A 代表信号重复的同名泵信号] 同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。
 FX_X1SX3_AI4,Ⅰ系列扫选3作业液位阀1开度设定显示,A,observable,keep_individual,FX_X1SX3_AI4,passthrough,,Ⅰ系列扫选3作业液位阀1开度设定显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1SX3_AI5,Ⅰ系列扫选3作业气量1实际值,A,observable,keep_individual,FX_X1SX3_AI5,passthrough,,Ⅰ系列扫选3作业气量1实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1SX3_AI7,Ⅰ系列扫选3作业蝶阀1开度实际值,A,observable,keep_individual,FX_X1SX3_AI7,passthrough,,Ⅰ系列扫选3作业蝶阀1开度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -85,33 +85,33 @@ FX_FT_2601,二系列粗选给矿泵1101出口管道流量,B,operable,keep_indivi
 FX_FT_2602,二系列粗选给矿泵1102出口管道流量,B,operable,keep_individual,FX_FT_2602,passthrough,,二系列粗选给矿泵1102出口管道流量,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_PT_901_CK,离心鼓风机901出口压力,C,observable,keep_individual,FX_PT_901_CK,passthrough,,离心鼓风机901出口压力,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_PT_902_CK,离心鼓风机902出口压力,C,observable,keep_individual,FX_PT_902_CK,passthrough,,离心鼓风机902出口压力,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_906_JK,离心鼓风机906进口温度,C,observable,keep_individual,FX_TT_906_JK,passthrough,,离心鼓风机906进口温度,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_TT_906_JK,离心鼓风机906进口温度,C,observable,drop,(deleted),none,,离心鼓风机906进口温度,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 FX_LT_1601_BJ,一系列精选泡沫及一扫底流泵池(给粗选)液位报警,A,observable,keep_individual,FX_LT_1601_BJ,passthrough,,一系列精选泡沫及一扫底流泵池(给粗选)液位报警,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_1602_BJ,一系列粗选泡沫及二扫底流泵池(给一扫)液位报警,C,observable,keep_individual,FX_LT_1602_BJ,passthrough,,一系列粗选泡沫及二扫底流泵池(给一扫)液位报警,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_LT_1602_BJ,一系列粗选泡沫及二扫底流泵池(给一扫)液位报警,C,observable,drop,(deleted),none,,一系列粗选泡沫及二扫底流泵池(给一扫)液位报警,[Cat-3: 控制限/报警信号] 报警信号（_BJ）和控制上限（_HSV）是实测值的阈值派生量，非独立工艺状态，会在 DML 残差中引入人工非线性。
 FX_LT_1604_BJ,一系列尾矿泵池(给尾矿浓缩机)液位报警,A,observable,keep_individual,FX_LT_1604_BJ,passthrough,,一系列尾矿泵池(给尾矿浓缩机)液位报警,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_FT_2602_BJ,二系列粗选给矿泵1102出口管道流量报警,B,operable,keep_individual,FX_FT_2602_BJ,passthrough,,二系列粗选给矿泵1102出口管道流量报警,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1104_I,渣浆泵(粗选给矿泵)1104电流反馈,A,observable,keep_individual,FX_ZJB1104_I,passthrough,,渣浆泵(粗选给矿泵)1104电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1201_I,渣浆泵(一扫给矿泵)1201电流反馈,A,observable,keep_individual,FX_ZJB1201_I,passthrough,,渣浆泵(一扫给矿泵)1201电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TV_1101_AI,一系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-1101阀位反馈信号,C,observable,keep_individual,FX_TV_1101_AI,passthrough,,一系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-1101阀位反馈信号,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1202_I,渣浆泵(一扫给矿泵)1202电流反馈,A,observable,keep_individual,FX_ZJB1202_I,passthrough,,渣浆泵(一扫给矿泵)1202电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1203_I,渣浆泵(一扫给矿泵)1203电流反馈,C,observable,keep_individual,FX_ZJB1203_I,passthrough,,渣浆泵(一扫给矿泵)1203电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1204_F,渣浆泵(一扫给矿泵)1204频率反馈,C,observable,keep_individual,FX_ZJB1204_F,passthrough,,渣浆泵(一扫给矿泵)1204频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1204_I,渣浆泵(一扫给矿泵)1204电流反馈,C,observable,keep_individual,FX_ZJB1204_I,passthrough,,渣浆泵(一扫给矿泵)1204电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1302_I,渣浆泵(二扫给矿泵)1302电流反馈,C,observable,keep_individual,FX_ZJB1302_I,passthrough,,渣浆泵(二扫给矿泵)1302电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1203_I,渣浆泵(一扫给矿泵)1203电流反馈,C,observable,drop,(deleted),none,,渣浆泵(一扫给矿泵)1203电流反馈,[Cat-8: 与 Group A 代表信号重复的同名泵信号] 同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。
+FX_ZJB1204_F,渣浆泵(一扫给矿泵)1204频率反馈,C,observable,drop,(deleted),none,,渣浆泵(一扫给矿泵)1204频率反馈,[Cat-8: 与 Group A 代表信号重复的同名泵信号] 同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。
+FX_ZJB1204_I,渣浆泵(一扫给矿泵)1204电流反馈,C,observable,drop,(deleted),none,,渣浆泵(一扫给矿泵)1204电流反馈,[Cat-8: 与 Group A 代表信号重复的同名泵信号] 同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。
+FX_ZJB1302_I,渣浆泵(二扫给矿泵)1302电流反馈,C,observable,drop,(deleted),none,,渣浆泵(二扫给矿泵)1302电流反馈,[Cat-8: 与 Group A 代表信号重复的同名泵信号] 同功能泵已保留 Group A 代表信号（1201_F+I、1303_F+I），1203_I/1204_F/1204_I（一扫）和 1301_I/1302_I（二扫）为冗余重复，删除。
 FX_ZJB1303_F,渣浆泵(二扫给矿泵)1303频率反馈,A,observable,keep_individual,FX_ZJB1303_F,passthrough,,渣浆泵(二扫给矿泵)1303频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1303_I,渣浆泵(二扫给矿泵)1303电流反馈,A,observable,keep_individual,FX_ZJB1303_I,passthrough,,渣浆泵(二扫给矿泵)1303电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1304_F,渣浆泵(二扫给矿泵)1304频率反馈,A,observable,keep_individual,FX_ZJB1304_F,passthrough,,渣浆泵(二扫给矿泵)1304频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_ZJB1304_I,渣浆泵(二扫给矿泵)1304电流反馈,A,observable,keep_individual,FX_ZJB1304_I,passthrough,,渣浆泵(二扫给矿泵)1304电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1604_I,渣浆泵(尾矿泵)1604电流反馈,C,observable,keep_individual,FX_ZJB1604_I,passthrough,,渣浆泵(尾矿泵)1604电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1604_I,渣浆泵(尾矿泵)1604电流反馈,C,observable,drop,(deleted),none,,渣浆泵(尾矿泵)1604电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 MC2_QC602_LCDY_AI,励磁电压值,C,observable,aggregate,agg_mag_excit_voltage,mean,磁选,励磁电压,强磁机励磁电压是磁选强度的直接控制量，13 台并联机器取均值反映全区励磁水平。
-FX_GFJ901_I,离心鼓风机901电流反馈,C,observable,keep_individual,FX_GFJ901_I,passthrough,,离心鼓风机901电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_GFJ902_F,离心鼓风机902频率反馈,C,observable,keep_individual,FX_GFJ902_F,passthrough,,离心鼓风机902频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_GFJ901_I,离心鼓风机901电流反馈,C,observable,drop,(deleted),none,,离心鼓风机901电流反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
+FX_GFJ902_F,离心鼓风机902频率反馈,C,observable,drop,(deleted),none,,离心鼓风机902频率反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 FX_LGB2702_F,螺杆泵(输送二次NaOH)2702频率反馈,C,observable,keep_individual,FX_LGB2702_F,passthrough,,螺杆泵(输送二次NaOH)2702频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_GFJ903_I,离心鼓风机903电流反馈,C,observable,keep_individual,FX_GFJ903_I,passthrough,,离心鼓风机903电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_GFJ903_I,离心鼓风机903电流反馈,C,observable,drop,(deleted),none,,离心鼓风机903电流反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 MC1_FV301_AO,3#三次分级旋流器沉砂加水管道阀位给定,C,observable,aggregate,agg_tm_cyclone_sand_valve_setpoint,mean,塔磨,沉砂水阀给定,旋流器沉砂加水阀位给定（AO），5 组并联取均值为控制意图代表。
-FX_GFJ904_I,离心鼓风机904电流反馈,C,observable,keep_individual,FX_GFJ904_I,passthrough,,离心鼓风机904电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_GFJ905_I,离心鼓风机905电流反馈,C,observable,keep_individual,FX_GFJ905_I,passthrough,,离心鼓风机905电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_GFJ906_F,离心鼓风机906频率反馈,C,observable,keep_individual,FX_GFJ906_F,passthrough,,离心鼓风机906频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_GFJ904_I,离心鼓风机904电流反馈,C,observable,drop,(deleted),none,,离心鼓风机904电流反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
+FX_GFJ905_I,离心鼓风机905电流反馈,C,observable,drop,(deleted),none,,离心鼓风机905电流反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
+FX_GFJ906_F,离心鼓风机906频率反馈,C,observable,drop,(deleted),none,,离心鼓风机906频率反馈,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 FX_X1CX1_AI1,Ⅰ系列粗选1作业泡沫层厚度实际值,C,observable,keep_individual,FX_X1CX1_AI1,passthrough,,Ⅰ系列粗选1作业泡沫层厚度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1CX1_AI5,Ⅰ系列粗选1作业气量1实际值,C,observable,keep_individual,FX_X1CX1_AI5,passthrough,,Ⅰ系列粗选1作业气量1实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1CX2_AI7,Ⅰ系列粗选2作业蝶阀1开度实际值,C,observable,keep_individual,FX_X1CX2_AI7,passthrough,,Ⅰ系列粗选2作业蝶阀1开度实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -133,33 +133,33 @@ FX_X1JX_AI3,Ⅰ系列精选作业液位阀1开度实际值,A,observable,keep_ind
 FX_X1JX_AI5,Ⅰ系列精选作业气量1实际值,C,observable,keep_individual,FX_X1JX_AI5,passthrough,,Ⅰ系列精选作业气量1实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1JX_AI9,Ⅰ系列精选作业气量2实际值,A,observable,keep_individual,FX_X1JX_AI9,passthrough,,Ⅰ系列精选作业气量2实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X1JX_AI13,Ⅰ系列精选作业气量3实际值,C,observable,keep_individual,FX_X1JX_AI13,passthrough,,Ⅰ系列精选作业气量3实际值,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_621C1,,C,observable,keep_individual,FX_TT_621C1,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_621B,,C,observable,keep_individual,FX_LT_621B,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_621B2,,C,observable,keep_individual,FX_TT_621B2,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622A,,C,observable,keep_individual,FX_FT_622A,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622B,,C,observable,keep_individual,FX_FT_622B,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622C,,C,observable,keep_individual,FX_FT_622C,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622D,,C,observable,keep_individual,FX_FT_622D,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_631B,,C,observable,keep_individual,FX_TT_631B,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_621C,,C,observable,keep_individual,FX_LT_621C,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_621D,,C,observable,keep_individual,FX_LT_621D,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622E,,C,observable,keep_individual,FX_FT_622E,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622F,,C,observable,keep_individual,FX_FT_622F,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622G,,C,observable,keep_individual,FX_FT_622G,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622H,,C,observable,keep_individual,FX_FT_622H,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_TT_621C1,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_LT_621B,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_TT_621B2,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622A,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622B,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622C,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622D,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_TT_631B,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_LT_621C,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_LT_621D,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622E,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622F,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622G,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_622H,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_TT_2102,二系列2#-3高效搅拌槽温度,C,observable,keep_individual,FX_TT_2102,passthrough,,二系列2#-3高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TT_2105,二系列3#-3高效搅拌槽温度,B,observable,keep_individual,FX_TT_2105,passthrough,,二系列3#-3高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TT_2106,二系列3#-4高效搅拌槽温度,C,observable,keep_individual,FX_TT_2106,passthrough,,二系列3#-4高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_AT_2104,二系列3#-4高效搅拌槽PH值,B,observable,keep_individual,FX_AT_2104,passthrough,,二系列3#-4高效搅拌槽PH值,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_HV_632_AI,二次TD-Ⅱ搅拌槽加入热水主管道电动调节球阀HV-632阀位反馈信号,C,observable,keep_individual,FX_HV_632_AI,passthrough,,二次TD-Ⅱ搅拌槽加入热水主管道电动调节球阀HV-632阀位反馈信号,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TV_621A_AI,,C,observable,keep_individual,FX_TV_621A_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TV_621B_AI,,C,observable,keep_individual,FX_TV_621B_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TV_621C_AI,,C,observable,keep_individual,FX_TV_621C_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TV_621D_AI,,C,observable,keep_individual,FX_TV_621D_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_TV_621A_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_TV_621B_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_TV_621C_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_TV_621D_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_HV_631_AI,热水桶加蒸汽电动调节蝶阀HV-631阀位反馈信号,C,observable,keep_individual,FX_HV_631_AI,passthrough,,热水桶加蒸汽电动调节蝶阀HV-631阀位反馈信号,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_HV_621A_AI,,C,observable,keep_individual,FX_HV_621A_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_HV_621C_AI,,C,observable,keep_individual,FX_HV_621C_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_HV_621D_AI,,C,observable,keep_individual,FX_HV_621D_AI,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_HV_621A_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_HV_621C_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_HV_621D_AI,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_3QF05_ZT,5#阀状态,C,observable,keep_individual,FX_3QF05_ZT,passthrough,,5#阀状态,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2602_I,螺杆泵(输送二次K6-1一扫)2602电流反馈,C,observable,keep_individual,FX_LGB2602_I,passthrough,,螺杆泵(输送二次K6-1一扫)2602电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2502_F,螺杆泵(输送二次K6-1粗选)2502频率反馈,B,observable,keep_individual,FX_LGB2502_F,passthrough,,螺杆泵(输送二次K6-1粗选)2502频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -168,13 +168,13 @@ FX_LGB2302_F,螺杆泵(输送二次TD-II粗选)2302频率反馈,C,observable,kee
 FX_HGB2204_I,化工泵(输送一次CaO)2204电流反馈,A,observable,keep_individual,FX_HGB2204_I,passthrough,,化工泵(输送一次CaO)2204电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_HGB2204_F,化工泵(输送一次CaO)2204频率反馈,A,observable,keep_individual,FX_HGB2204_F,passthrough,,化工泵(输送一次CaO)2204频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_HGB2202_I,化工泵(输送一次CaO)2202电流反馈,C,observable,keep_individual,FX_HGB2202_I,passthrough,,化工泵(输送一次CaO)2202电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1504_I,渣浆泵(事故泵)1504电流反馈,C,observable,keep_individual,FX_ZJB1504_I,passthrough,,渣浆泵(事故泵)1504电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1504_F,渣浆泵(事故泵)1504频率反馈,C,observable,keep_individual,FX_ZJB1504_F,passthrough,,渣浆泵(事故泵)1504频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1502_I,渣浆泵(事故泵)1502电流反馈,C,observable,keep_individual,FX_ZJB1502_I,passthrough,,渣浆泵(事故泵)1502电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1502_F,渣浆泵(事故泵)1502频率反馈,C,observable,keep_individual,FX_ZJB1502_F,passthrough,,渣浆泵(事故泵)1502频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1404_I,渣浆泵(精矿泵)1404电流反馈,C,observable,keep_individual,FX_ZJB1404_I,passthrough,,渣浆泵(精矿泵)1404电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1404_F,渣浆泵(精矿泵)1404频率反馈,C,observable,keep_individual,FX_ZJB1404_F,passthrough,,渣浆泵(精矿泵)1404频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1402_I,渣浆泵(精矿泵)1402电流反馈,C,observable,keep_individual,FX_ZJB1402_I,passthrough,,渣浆泵(精矿泵)1402电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1504_I,渣浆泵(事故泵)1504电流反馈,C,observable,drop,(deleted),none,,渣浆泵(事故泵)1504电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1504_F,渣浆泵(事故泵)1504频率反馈,C,observable,drop,(deleted),none,,渣浆泵(事故泵)1504频率反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1502_I,渣浆泵(事故泵)1502电流反馈,C,observable,drop,(deleted),none,,渣浆泵(事故泵)1502电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1502_F,渣浆泵(事故泵)1502频率反馈,C,observable,drop,(deleted),none,,渣浆泵(事故泵)1502频率反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1404_I,渣浆泵(精矿泵)1404电流反馈,C,observable,drop,(deleted),none,,渣浆泵(精矿泵)1404电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1404_F,渣浆泵(精矿泵)1404频率反馈,C,observable,drop,(deleted),none,,渣浆泵(精矿泵)1404频率反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1402_I,渣浆泵(精矿泵)1402电流反馈,C,observable,drop,(deleted),none,,渣浆泵(精矿泵)1402电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 FX_DT_2602,粗选给矿泵1104出口管道浓度,B,observable,keep_individual,FX_DT_2602,passthrough,,粗选给矿泵1104出口管道浓度,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TV_2102_AI,二系列2#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2102阀位反馈信号,B,observable,keep_individual,FX_TV_2102_AI,passthrough,,二系列2#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2102阀位反馈信号,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TV_2104_AI,二系列2#-2高效搅拌槽加蒸汽电动调节蝶阀TV-2104阀位反馈信号,C,observable,keep_individual,FX_TV_2104_AI,passthrough,,二系列2#-2高效搅拌槽加蒸汽电动调节蝶阀TV-2104阀位反馈信号,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -182,7 +182,7 @@ FX_FT_2701,二系列1#-3高效高效搅拌槽入矿管道流量,B,observable,kee
 FX_FT_2702,二系列1#-4高效高效搅拌槽入矿管道流量,B,observable,keep_individual,FX_FT_2702,passthrough,,二系列1#-4高效高效搅拌槽入矿管道流量,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_3QF11_ZT,11#阀状态,C,observable,keep_individual,FX_3QF11_ZT,passthrough,,11#阀状态,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_HGB2201_F,化工泵(输送一次CaO)2201频率反馈,C,observable,keep_individual,FX_HGB2201_F,passthrough,,化工泵(输送一次CaO)2201频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_642A,,C,observable,keep_individual,FX_FT_642A,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FT_642A,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_HGB2203_I,化工泵(输送一次CaO)2203电流反馈,C,observable,keep_individual,FX_HGB2203_I,passthrough,,化工泵(输送一次CaO)2203电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2303_F_W,螺杆泵(输送二次TD-II粗选)2303频率给定,C,observable,keep_individual,FX_LGB2303_F_W,passthrough,,螺杆泵(输送二次TD-II粗选)2303频率给定,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2303_I,螺杆泵(输送二次TD-II粗选)2303电流反馈,A,observable,keep_individual,FX_LGB2303_I,passthrough,,螺杆泵(输送二次TD-II粗选)2303电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -193,13 +193,13 @@ FX_LGB2701_F,螺杆泵(输送二次NaOH)2701频率反馈,A,observable,keep_indiv
 FX_LGB2801_F,螺杆泵((皂化泵TD-II粗选))2801频率反馈,C,observable,keep_individual,FX_LGB2801_F,passthrough,,螺杆泵((皂化泵TD-II粗选))2801频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2801_I,螺杆泵((皂化泵TD-II粗选))2801电流反馈,C,observable,keep_individual,FX_LGB2801_I,passthrough,,螺杆泵((皂化泵TD-II粗选))2801电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 MC2_QC606_WKF1_AI,1#尾矿阀门实际开度反馈值,C,observable,aggregate,agg_mag_tailings_valve1,mean,磁选,尾矿阀1开度,1# 尾矿阀门开度控制排尾量，10 台并联取均值。
-FX_ZJB41_I,渣浆泵41电流反馈,C,observable,keep_individual,FX_ZJB41_I,passthrough,,渣浆泵41电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB41_I,渣浆泵41电流反馈,C,observable,drop,(deleted),none,,渣浆泵41电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 MC2_RC106_DY_AI,BC线电压,C,observable,aggregate,agg_mag_motor_voltage_rc,mean,磁选,电机电压,MC2_RC101/102/106 的 BC 线电压是磁选机主电机电压代表，3 台取均值。
-FX_ZJB3004_I,渣浆泵(溢流泵)3004电流反馈,C,observable,keep_individual,FX_ZJB3004_I,passthrough,,渣浆泵(溢流泵)3004电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB3004_I,渣浆泵(溢流泵)3004电流反馈,C,observable,drop,(deleted),none,,渣浆泵(溢流泵)3004电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 FX_ZJB62_I,渣浆泵62电流反馈,C,observable,keep_individual,FX_ZJB62_I,passthrough,,渣浆泵62电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB33_F,渣浆泵33频率反馈,C,observable,keep_individual,FX_ZJB33_F,passthrough,,渣浆泵33频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB33_I,渣浆泵33电流反馈,C,observable,keep_individual,FX_ZJB33_I,passthrough,,渣浆泵33电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB34_I,渣浆泵34电流反馈,C,observable,keep_individual,FX_ZJB34_I,passthrough,,渣浆泵34电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB33_F,渣浆泵33频率反馈,C,observable,drop,(deleted),none,,渣浆泵33频率反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB33_I,渣浆泵33电流反馈,C,observable,drop,(deleted),none,,渣浆泵33电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB34_I,渣浆泵34电流反馈,C,observable,drop,(deleted),none,,渣浆泵34电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 FX_ZJB43_I,渣浆泵43电流反馈,C,observable,keep_individual,FX_ZJB43_I,passthrough,,渣浆泵43电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 MC2_QC501_XKYW_AI,选矿液位,C,observable,aggregate,agg_mag_level,mean,磁选,选矿液位,磁选槽内液位反映矿浆充填程度，9 台并联取均值。注：部分仪表精度较低。
 FX_ZJB13_F,渣浆泵13频率反馈,C,observable,keep_individual,FX_ZJB13_F,passthrough,,渣浆泵13频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -217,9 +217,9 @@ FX_X2CX2_AI9,Ⅱ系列粗选2作业气量2实际值,B,observable,keep_individual
 FX_X2CX2_AI12,Ⅱ系列粗选2作业蝶阀2开度设定值显示,B,observable,keep_individual,FX_X2CX2_AI12,passthrough,,Ⅱ系列粗选2作业蝶阀2开度设定值显示,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_JBC1902_I,搅拌槽(二次CaO)1902电流,C,observable,keep_individual,FX_JBC1902_I,passthrough,,搅拌槽(二次CaO)1902电流,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_JBC1901_I,搅拌槽(二次CaO)1901电流,A,observable,keep_individual,FX_JBC1901_I,passthrough,,搅拌槽(二次CaO)1901电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FXJ401_U,浮选机(粗选)401电压,C,observable,keep_individual,FX_FXJ401_U,passthrough,,浮选机(粗选)401电压,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FXJ401_U,浮选机(粗选)401电压,C,observable,drop,(deleted),none,,浮选机(粗选)401电压,[Cat-4: 浮选机单机电流/电压（Group C）] 专家知识文档浮选段观测空间不包含浮选机电机电流/电压。电流仅反映电机负载状态（有无堵转），对浮选分离效率无直接解释力。气量（_AI5/AI9）和阀位（_AI7）已保留为主控变量。
 FX_JBC102_I,1#高效搅拌槽102电流,C,observable,keep_individual,FX_JBC102_I,passthrough,,1#高效搅拌槽102电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB3002_I,渣浆泵(溢流泵)3002电流反馈,C,observable,keep_individual,FX_ZJB3002_I,passthrough,,渣浆泵(溢流泵)3002电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB3002_I,渣浆泵(溢流泵)3002电流反馈,C,observable,drop,(deleted),none,,渣浆泵(溢流泵)3002电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 FX_LGB2602_F,螺杆泵(输送二次K6-1一扫)2602频率反馈,B,observable,keep_individual,FX_LGB2602_F,passthrough,,螺杆泵(输送二次K6-1一扫)2602频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TT_1101,一系列1#-1高效搅拌槽温度,A,observable,keep_individual,FX_TT_1101,passthrough,,一系列1#-1高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_TT_1105,一系列3#-1高效搅拌槽温度,C,observable,keep_individual,FX_TT_1105,passthrough,,一系列3#-1高效搅拌槽温度,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -234,34 +234,34 @@ FX_JBC203_I,2#高效搅拌槽203电流,B,observable,keep_individual,FX_JBC203_I,
 FX_JBC303_I,3#高效搅拌槽303电流,C,observable,keep_individual,FX_JBC303_I,passthrough,,3#高效搅拌槽303电流,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_JBC1801_I,搅拌槽(一次CaO)1801电流,C,observable,keep_individual,FX_JBC1801_I,passthrough,,搅拌槽(一次CaO)1801电流,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_JBC1903_I,搅拌槽(二次CaO)1903电流,C,observable,keep_individual,FX_JBC1903_I,passthrough,,搅拌槽(二次CaO)1903电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_641A,,C,observable,keep_individual,FX_LT_641A,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_LT_641A,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 MC2_QC610_WKF2_AI,2#尾矿阀门实际开度反馈值,C,observable,aggregate,agg_mag_tailings_valve2,mean,磁选,尾矿阀2开度,2# 尾矿阀门开度与 1# 合并可看出阀门调节整体状态，14 台并联取均值。
-FX_FT_642B,,C,observable,keep_individual,FX_FT_642B,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_642C,,C,observable,keep_individual,FX_FT_642C,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_642D,,C,observable,keep_individual,FX_FT_642D,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612F,,C,observable,keep_individual,FX_FT_612F,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612C,,C,observable,keep_individual,FX_FT_612C,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612D,,C,observable,keep_individual,FX_FT_612D,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612E,,C,observable,keep_individual,FX_FT_612E,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612G,,C,observable,keep_individual,FX_FT_612G,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_612H,,C,observable,keep_individual,FX_FT_612H,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FT_642B,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_642C,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_642D,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612F,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612C,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612D,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612E,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612G,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_FT_612H,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
 FX_LT_611,二次K6-1贮药箱(贮罐)液位,C,observable,keep_individual,FX_LT_611,passthrough,,二次K6-1贮药箱(贮罐)液位,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_FT_622E_SP,,C,observable,keep_individual,FX_FT_622E_SP,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_P1_N2_I,4#Φ30m浮选前浓缩机N2电流,C,observable,keep_individual,FX_P1_N2_I,passthrough,,4#Φ30m浮选前浓缩机N2电流,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FT_622E_SP,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_P1_N2_I,4#Φ30m浮选前浓缩机N2电流,C,observable,drop,(deleted),none,,4#Φ30m浮选前浓缩机N2电流,[Cat-6: 浓缩机/磁选机机械监测] 提耙压力、落耙压力、挂泥电机扭矩为设备健康监测量，专家知识文档未将其列入磁选/浓缩段的观测或控制空间，对矿石品位无直接影响。
 FX_P2_N1_I,6#Φ30m浮选前浓缩机N1电流,C,observable,keep_individual,FX_P2_N1_I,passthrough,,6#Φ30m浮选前浓缩机N1电流,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_P3_N2_I,4#Φ53m浮选前浓缩机N2电流,C,observable,keep_individual,FX_P3_N2_I,passthrough,,4#Φ53m浮选前浓缩机N2电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH12_AI6,浮选4#鼓风机变频总瞬时有功功率,C,observable,keep_individual,FX_AH12_AI6,passthrough,,浮选4#鼓风机变频总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH16_AI6,浮选6#鼓风机变频总瞬时有功功率,C,observable,keep_individual,FX_AH16_AI6,passthrough,,浮选6#鼓风机变频总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_901_JK,离心鼓风机901进口温度,C,observable,keep_individual,FX_TT_901_JK,passthrough,,离心鼓风机901进口温度,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_AH12_AI6,浮选4#鼓风机变频总瞬时有功功率,C,observable,drop,(deleted),none,,浮选4#鼓风机变频总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_AH16_AI6,浮选6#鼓风机变频总瞬时有功功率,C,observable,drop,(deleted),none,,浮选6#鼓风机变频总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_TT_901_JK,离心鼓风机901进口温度,C,observable,drop,(deleted),none,,离心鼓风机901进口温度,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 FX_X2CX3_AI13,Ⅱ系列粗选3作业1#减速机低速端上轴温,B,observable,keep_individual,FX_X2CX3_AI13,passthrough,,Ⅱ系列粗选3作业1#减速机低速端上轴温,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_X2JX_AI17,Ⅱ系列精选作业1#减速机低速端上轴温,B,observable,keep_individual,FX_X2JX_AI17,passthrough,,Ⅱ系列精选作业1#减速机低速端上轴温,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_TT_902_JK,离心鼓风机902进口温度,C,observable,keep_individual,FX_TT_902_JK,passthrough,,离心鼓风机902进口温度,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_TT_902_JK,离心鼓风机902进口温度,C,observable,drop,(deleted),none,,离心鼓风机902进口温度,"[Cat-5: 离心鼓风机电流/频率/进口温度（Group C）] 鼓风机充气量已由浮选槽气量实测值（FX_X*_AI5/AI9）捕获；电流/频率/进口温度是机械健康监测，不在专家浮选控制观测空间中。保留鼓风机出口压力（FX_PT_901_CK, FX_PT_902_CK）作为气网边界条件。"
 FX_ZJB1601_F,渣浆泵(尾矿泵)1601频率反馈,C,observable,keep_individual,FX_ZJB1601_F,passthrough,,渣浆泵(尾矿泵)1601频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1601_I,渣浆泵(尾矿泵)1601电流反馈,C,observable,keep_individual,FX_ZJB1601_I,passthrough,,渣浆泵(尾矿泵)1601电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1602_I,渣浆泵(尾矿泵)1602电流反馈,C,observable,keep_individual,FX_ZJB1602_I,passthrough,,渣浆泵(尾矿泵)1602电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1603_I,渣浆泵(尾矿泵)1603电流反馈,C,observable,keep_individual,FX_ZJB1603_I,passthrough,,渣浆泵(尾矿泵)1603电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1601_I,渣浆泵(尾矿泵)1601电流反馈,C,observable,drop,(deleted),none,,渣浆泵(尾矿泵)1601电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1602_I,渣浆泵(尾矿泵)1602电流反馈,C,observable,drop,(deleted),none,,渣浆泵(尾矿泵)1602电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
+FX_ZJB1603_I,渣浆泵(尾矿泵)1603电流反馈,C,observable,drop,(deleted),none,,渣浆泵(尾矿泵)1603电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 FX_ZJB1401_F,渣浆泵(精矿泵)1401频率反馈,C,observable,keep_individual,FX_ZJB1401_F,passthrough,,渣浆泵(精矿泵)1401频率反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_ZJB1401_I,渣浆泵(精矿泵)1401电流反馈,C,observable,keep_individual,FX_ZJB1401_I,passthrough,,渣浆泵(精矿泵)1401电流反馈,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_ZJB1401_I,渣浆泵(精矿泵)1401电流反馈,C,observable,drop,(deleted),none,,渣浆泵(精矿泵)1401电流反馈,[Cat-7: 渣浆泵次要电流信号（Group C）] 尾矿泵/精矿泵保留代表性频率反馈（控制量代理），删除冗余电流；事故泵属应急设备（正常生产不运行）；无名渣浆泵（33/34/41/43）无可追溯业务含义，均删除。
 MC2_QC506_LCDY_AI,励磁电压值,C,operable,aggregate,agg_mag_excit_voltage,mean,磁选,励磁电压,强磁机励磁电压是磁选强度的直接控制量，13 台并联机器取均值反映全区励磁水平。
 FX_1FP2_ZT,电动阀(分配器)1#1FP2状态,C,observable,keep_individual,FX_1FP2_ZT,passthrough,,电动阀(分配器)1#1FP2状态,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_LGB2404_F_W,螺杆泵(输送二次TD-II精选)2404频率给定,A,operable,keep_individual,FX_LGB2404_F_W,passthrough,,螺杆泵(输送二次TD-II精选)2404频率给定,该变量没有并联同类信号，按专家知识保留为独立特征。
@@ -283,15 +283,15 @@ MC1_GKB704_DL,4#三旋给矿泵电流,C,operable,aggregate,agg_tm_cyclone_pump_c
 MC1_GKB706_DL,6#三旋给矿泵电流,C,operable,aggregate,agg_tm_cyclone_pump_current,mean,塔磨,给矿泵电流,12 台三旋给矿泵并联，8 台有电流代表变量，取均值反映泵组整体负荷。
 MC1_GKB707_DL,7#三旋给矿泵电流,C,operable,aggregate,agg_tm_cyclone_pump_current,mean,塔磨,给矿泵电流,12 台三旋给矿泵并联，8 台有电流代表变量，取均值反映泵组整体负荷。
 MC1_GKB708_DL,8#三旋给矿泵电流,C,operable,aggregate,agg_tm_cyclone_pump_current,mean,塔磨,给矿泵电流,12 台三旋给矿泵并联，8 台有电流代表变量，取均值反映泵组整体负荷。
-FX_FT_622A_LJ,,C,observable,keep_individual,FX_FT_622A_LJ,passthrough,,,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_LT_1601_HSV,一系列粗选给矿泵池液位液位控制上限,C,observable,keep_individual,FX_LT_1601_HSV,passthrough,,一系列粗选给矿泵池液位液位控制上限,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_FT_622A_LJ,,C,observable,drop,(deleted),none,,,[Cat-1: 身份未知变量] 在全部元数据源中均无 COMMENT/描述，无法确定物理含义，不纳入 DML 模型。
+FX_LT_1601_HSV,一系列粗选给矿泵池液位液位控制上限,C,observable,drop,(deleted),none,,一系列粗选给矿泵池液位液位控制上限,[Cat-3: 控制限/报警信号] 报警信号（_BJ）和控制上限（_HSV）是实测值的阈值派生量，非独立工艺状态，会在 DML 残差中引入人工非线性。
 FX_AH5_AI6,浮选1#低压室1#变压器总瞬时有功功率,A,observable,keep_individual,FX_AH5_AI6,passthrough,,浮选1#低压室1#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
 FX_AH6_AI6,浮选1#低压室2#变压器总瞬时有功功率,A,observable,keep_individual,FX_AH6_AI6,passthrough,,浮选1#低压室2#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH7_AI6,浮选2#低压室1#变压器总瞬时有功功率,C,observable,keep_individual,FX_AH7_AI6,passthrough,,浮选2#低压室1#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH9_AI6,浮选3#低压室1#变压器总瞬时有功功率,C,observable,keep_individual,FX_AH9_AI6,passthrough,,浮选3#低压室1#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH10_AI6,浮选3#低压室2#变压器总瞬时有功功率,C,observable,keep_individual,FX_AH10_AI6,passthrough,,浮选3#低压室2#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH14_AI7,浮选5#鼓风机变频总瞬时无功功率,C,observable,keep_individual,FX_AH14_AI7,passthrough,,浮选5#鼓风机变频总瞬时无功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-FX_AH16_AI5,浮选6#鼓风机变频总功率因素,C,observable,keep_individual,FX_AH16_AI5,passthrough,,浮选6#鼓风机变频总功率因素,该变量没有并联同类信号，按专家知识保留为独立特征。
+FX_AH7_AI6,浮选2#低压室1#变压器总瞬时有功功率,C,observable,drop,(deleted),none,,浮选2#低压室1#变压器总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_AH9_AI6,浮选3#低压室1#变压器总瞬时有功功率,C,observable,drop,(deleted),none,,浮选3#低压室1#变压器总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_AH10_AI6,浮选3#低压室2#变压器总瞬时有功功率,C,observable,drop,(deleted),none,,浮选3#低压室2#变压器总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_AH14_AI7,浮选5#鼓风机变频总瞬时无功功率,C,observable,drop,(deleted),none,,浮选5#鼓风机变频总瞬时无功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+FX_AH16_AI5,浮选6#鼓风机变频总功率因素,C,observable,drop,(deleted),none,,浮选6#鼓风机变频总功率因素,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
 MC1_FET101_AI,1#三次分级旋流器沉砂加水管道流量,C,observable,aggregate,agg_tm_cyclone_sand_water_flow,mean,塔磨,沉砂加水量,三次分级旋流器沉砂补水，6 组中 3 组有代表变量，取均值。
 MC1_FV101_AI,1#三次分级旋流器沉砂加水管道阀位反馈,C,observable,aggregate,agg_tm_cyclone_sand_valve_feedback,mean,塔磨,沉砂水阀反馈,旋流器沉砂加水阀位反馈（AI），3 组并联取均值，与给定一起反映阀门控制状态。
 MC1_FET102_AI,1#三次分级旋流器给矿管道流量,C,operable,aggregate,agg_tm_cyclone_feed_flow,mean,塔磨,给矿流量,三次分级旋流器给矿流量，6 组均有代表变量，取均值反映整体给矿水平。
@@ -322,7 +322,7 @@ MC1_TM205_JSJ_CYK_WD_AI,减速机出油口温度,C,observable,aggregate,agg_tm_r
 MC1_TM205_ZDJ_DL_AI,主电机电流,C,observable,aggregate,agg_tm_motor_current,mean,塔磨,主电机电流,6 台塔磨并联运行，主电机电流反映各机磨矿载荷，5 台有代表变量，取均值。
 MC1_TM206_HDZC_2_WD_AI,滑动轴承2#温度,C,observable,keep_individual,MC1_TM206_HDZC_2_WD_AI,passthrough,,滑动轴承2#温度,该变量没有并联同类信号，按专家知识保留为独立特征。
 MC1_TM206_ZDJ_DZ_B_WD_AI,主电机定子B温度,C,observable,keep_individual,MC1_TM206_ZDJ_DZ_B_WD_AI,passthrough,,主电机定子B温度,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC2_CQC_GNJNJ_AI,挂泥电机扭矩,C,observable,keep_individual,MC2_CQC_GNJNJ_AI,passthrough,,挂泥电机扭矩,该变量没有并联同类信号，按专家知识保留为独立特征。
+MC2_CQC_GNJNJ_AI,挂泥电机扭矩,C,observable,drop,(deleted),none,,挂泥电机扭矩,[Cat-6: 浓缩机/磁选机机械监测] 提耙压力、落耙压力、挂泥电机扭矩为设备健康监测量，专家知识文档未将其列入磁选/浓缩段的观测或控制空间，对矿石品位无直接影响。
 MC1_TM206_JSJ_CYK_WD_AI,减速机出油口温度,C,observable,aggregate,agg_tm_reducer_outlet_temp,mean,塔磨,减速机出油温,减速机出油口温度是润滑系统实时热状态，4 台有代表变量，取均值。
 MC1_TM206_ZDJ_DL_AI,主电机电流,C,observable,aggregate,agg_tm_motor_current,mean,塔磨,主电机电流,6 台塔磨并联运行，主电机电流反映各机磨矿载荷，5 台有代表变量，取均值。
 MC2_LET_102_AI,1#三次分级旋流器溢流泵池液位,C,observable,aggregate,agg_tm_cyclone_overflow_pool_level,mean,塔磨,溢流泵池液位,三次分级旋流器溢流泵池液位，3 个并联泵池取均值，反映后段矿浆缓冲状态。
@@ -453,12 +453,12 @@ MC2_QC609_XKYW_AI,选矿液位,C,observable,aggregate,agg_mag_level,mean,磁选,
 MC2_QC610_LCDY_AI,励磁电压值,C,operable,aggregate,agg_mag_excit_voltage,mean,磁选,励磁电压,强磁机励磁电压是磁选强度的直接控制量，13 台并联机器取均值反映全区励磁水平。
 MC2_QC610_WKF1_AI,1#尾矿阀门实际开度反馈值,C,observable,aggregate,agg_mag_tailings_valve1,mean,磁选,尾矿阀1开度,1# 尾矿阀门开度控制排尾量，10 台并联取均值。
 MC2_QC610_PWF_AI,排污阀门开度实际值,C,observable,aggregate,agg_mag_blowdown_valve,mean,磁选,排污阀开度,排污阀开度反映磁选机排矿状态，10 台并联取均值。
-MC1_AH12_AI7,磨磁6#塔磨机总瞬时无功功率,C,observable,keep_individual,MC1_AH12_AI7,passthrough,,磨磁6#塔磨机总瞬时无功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC1_AH9_AI4,磨磁3#配电室1#变压器电网频率,C,operable,keep_individual,MC1_AH9_AI4,passthrough,,磨磁3#配电室1#变压器电网频率,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC1_AH6_AI6,磨磁3#配电室2#变压器总瞬时有功功率,C,observable,keep_individual,MC1_AH6_AI6,passthrough,,磨磁3#配电室2#变压器总瞬时有功功率,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC1_AH8_AI5,磨磁2#配电室2#变压器总功率因素,C,observable,keep_individual,MC1_AH8_AI5,passthrough,,磨磁2#配电室2#变压器总功率因素,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC1_AH10_AI5,磨磁1#配电室2#变压器总功率因素,C,observable,keep_individual,MC1_AH10_AI5,passthrough,,磨磁1#配电室2#变压器总功率因素,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC1_AH12_AI5,磨磁6#塔磨机总功率因素,C,observable,keep_individual,MC1_AH12_AI5,passthrough,,磨磁6#塔磨机总功率因素,该变量没有并联同类信号，按专家知识保留为独立特征。
+MC1_AH12_AI7,磨磁6#塔磨机总瞬时无功功率,C,observable,drop,(deleted),none,,磨磁6#塔磨机总瞬时无功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+MC1_AH9_AI4,磨磁3#配电室1#变压器电网频率,C,operable,drop,(deleted),none,,磨磁3#配电室1#变压器电网频率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+MC1_AH6_AI6,磨磁3#配电室2#变压器总瞬时有功功率,C,observable,drop,(deleted),none,,磨磁3#配电室2#变压器总瞬时有功功率,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+MC1_AH8_AI5,磨磁2#配电室2#变压器总功率因素,C,observable,drop,(deleted),none,,磨磁2#配电室2#变压器总功率因素,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+MC1_AH10_AI5,磨磁1#配电室2#变压器总功率因素,C,observable,drop,(deleted),none,,磨磁1#配电室2#变压器总功率因素,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
+MC1_AH12_AI5,磨磁6#塔磨机总功率因素,C,observable,drop,(deleted),none,,磨磁6#塔磨机总功率因素,[Cat-2: 电能计量表] 专家知识文档各段观测空间均不包含变压器/变频器电能指标（有功功率/无功功率/功率因素/电网频率）。这些量反映电力消耗，对矿产品品位无直接解释力，删除以减少 DML 模型噪声。
 MC2_QC610_MDPL_AI,脉动电机实际工作频率显示值,C,observable,aggregate,agg_mag_pulsation_freq,mean,磁选,脉动频率,脉动频率直接影响磁选分离效果，19 台并联取均值为全区脉动水平代表。
 MC2_QC610_ZHPL_AI,转环电机实际工作频率显示值,C,observable,aggregate,agg_mag_ring_freq,mean,磁选,转环频率,转环频率控制磁选机矿浆处理速率，13 台并联取均值。
 MC2_QC610_XKYW_AI,选矿液位,C,observable,aggregate,agg_mag_level,mean,磁选,选矿液位,磁选槽内液位反映矿浆充填程度，9 台并联取均值。注：部分仪表精度较低。
@@ -467,5 +467,5 @@ MC2_RC101_DY_AI,BC线电压,C,observable,aggregate,agg_mag_motor_voltage_rc,mean
 MC2_RC102_DL_AI,A相电流,C,observable,aggregate,agg_mag_motor_current_rc,mean,磁选,电机电流,MC2_RC101/102 的 A 相电流是磁选机主电机电流的代表变量，2 台取均值。
 MC2_RC102_DY_AI,BC线电压,C,observable,aggregate,agg_mag_motor_voltage_rc,mean,磁选,电机电压,MC2_RC101/102/106 的 BC 线电压是磁选机主电机电压代表，3 台取均值。
 MC2_JYB2_DL_AI,A相电流,C,observable,keep_individual,MC2_JYB2_DL_AI,passthrough,,A相电流,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC2_NSJ_TPYL_AI,提耙压力,C,observable,keep_individual,MC2_NSJ_TPYL_AI,passthrough,,提耙压力,该变量没有并联同类信号，按专家知识保留为独立特征。
-MC2_NSJ_LPYL_AI,落耙压力,C,observable,keep_individual,MC2_NSJ_LPYL_AI,passthrough,,落耙压力,该变量没有并联同类信号，按专家知识保留为独立特征。
+MC2_NSJ_TPYL_AI,提耙压力,C,observable,drop,(deleted),none,,提耙压力,[Cat-6: 浓缩机/磁选机机械监测] 提耙压力、落耙压力、挂泥电机扭矩为设备健康监测量，专家知识文档未将其列入磁选/浓缩段的观测或控制空间，对矿石品位无直接影响。
+MC2_NSJ_LPYL_AI,落耙压力,C,observable,drop,(deleted),none,,落耙压力,[Cat-6: 浓缩机/磁选机机械监测] 提耙压力、落耙压力、挂泥电机扭矩为设备健康监测量，专家知识文档未将其列入磁选/浓缩段的观测或控制空间，对矿石品位无直接影响。
