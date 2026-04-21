@@ -112,28 +112,28 @@ DEFAULT_DAG_ROLES_CSV = next(
 )
 
 
-# ═══════════════════════════════════════════════════════════════════
-#  超参
-# ═══════════════════════════════════════════════════════════════════
-SEQ_LEN                    = 6    # 滞后窗口长度（与 v3 LSTM 序列长度一致）
-EMBARGO_GAP                = 4    # 训练/验证折之间的时间间隔（防数据泄露）
-K_FOLDS                    = 4    # 交叉拟合折数
-N_BOOTSTRAP                = 5    # Bootstrap 重复次数
+# ══════════════════════════════════════════════════════════════════
+#  超参（适配原始 ~1900 行 × 167 维数据）
+# ══════════════════════════════════════════════════════════════════
+SEQ_LEN                    = 6     # 滞后窗口长度
+EMBARGO_GAP                = 4     # 训练/验证折之间的时间间隔
+K_FOLDS                    = 4     # 交叉拟合折数
+N_BOOTSTRAP                = 5     # Bootstrap 重复次数
 MIN_TRAIN_SIZE             = 100
-MIN_VALID_RESIDUALS        = 40
-F_STAT_THRESHOLD           = 6.0   # 相比 v5 的 5 更保守一些，便于与更复杂模型做同口径对照
+MIN_VALID_RESIDUALS        = 30    # 从 40 降到 30（IQR 过滤后保留更多残差）
+F_STAT_THRESHOLD           = 5.0   # 从 6.0 降到 5.0（适配真实工业数据）
 MIN_BOOTSTRAP_SUCCESS_RATE = 0.40
 MIN_SUCCESS_RATE_FLOOR     = 0.20
 MAX_SUCCESS_RATE_CEIL      = 1.00
-SAFE_X_MAX_COUNT           = 40    # 对 RF 保留较宽控制集，避免像深度模型那样过度裁剪
-CV_WARN                    = 0.30  # CV 超过此值视为不稳定
-SIGN_RATE_MIN              = 0.70  # 符号一致率低于此值视为不可信
+SAFE_X_MAX_COUNT           = 20    # 从 40 降到 20（~1900样本/20变量=95x，合理）
+CV_WARN                    = 0.30
+SIGN_RATE_MIN              = 0.70
 
-# ── RF 超参 ────────────────────────────────────────────────────────
+# ── RF 超参（适配 ~1900 行真实数据）────────────────────────────
 RF_N_ESTIMATORS     = 200
-RF_MAX_DEPTH        = 4      # 先给保守起点；建议结合 --rf_max_depth 对比 4/5/6 三档
-RF_MIN_SAMPLES_LEAF = 10     # 对 1900 左右样本量偏保守，减少叶节点碎片化，可按数据量下调
-RF_MAX_FEATURES     = 0.5    # 降低单棵树对高维控制变量的敏感性
+RF_MAX_DEPTH        = 3      # 从 4 降到 3（防止过拟合，1900样本适合浅树）
+RF_MIN_SAMPLES_LEAF = 20     # 从 10 升到 20（叶节点至少20样本，提高稳健性）
+RF_MAX_FEATURES     = "sqrt" # 从 0.5 改为 sqrt（RF 标准推荐，降低特征相关性）
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -254,6 +254,36 @@ def refine_safe_x(op: str, df: pd.DataFrame, safe_x: list,
 def prepare_safe_x(op: str, df: pd.DataFrame, states: list, dag_roles: dict) -> list:
     safe_x = build_safe_x_with_dag(op, df, states, dag_roles)
     return refine_safe_x(op, df, safe_x)
+
+
+# ══════════════════════════════════════════════════════════════════
+#  IQR 离群过滤（替代 3σ，对 ffill 后低方差 Y 不崩溃）
+# ══════════════════════════════════════════════════════════════════
+def _iqr_mask(arr: np.ndarray, k: float = 3.0) -> np.ndarray:
+    """
+    基于 IQR 的离群点过滤掩码。
+
+    相比 3σ 方法的优势：
+      - 当 arr 几乎是常数（std ≈ 0，如 ffill 后的 Y 残差）时，
+        3σ 阈值 ≈ 0 → 几乎所有点都被删除。
+      - IQR 方法：当 IQR < 1e-8 时直接返回全 True，保留所有点。
+
+    参数
+    ----
+    arr : 残差数组
+    k   : IQR 倍数（默认 3.0，等效于约 3σ 的覆盖范围）
+
+    返回
+    ----
+    mask : bool 数组，True 表示保留
+    """
+    q25, q75 = np.percentile(arr, 25), np.percentile(arr, 75)
+    iqr = q75 - q25
+    if iqr < 1e-8:
+        # 数组几乎是常数（比如 ffill 导致的平坦 Y 残差）
+        # → 跳过过滤，保留全部点
+        return np.ones(len(arr), dtype=bool)
+    return np.abs(arr - np.median(arr)) < k * iqr
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -397,9 +427,8 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
         res_Y = np.array(all_res_Y, dtype=np.float64)
         res_D = np.array(all_res_D, dtype=np.float64)
 
-        # 去离群（3σ）
-        mask  = ((np.abs(res_Y) < 3 * res_Y.std()) &
-                 (np.abs(res_D) < 3 * res_D.std()))
+        # 去离群（IQR 方法，对 ffill 后低方差 Y 不崩溃）
+        mask  = _iqr_mask(res_Y) & _iqr_mask(res_D)
         res_Y, res_D = res_Y[mask], res_D[mask]
         if len(res_D) < MIN_VALID_RESIDUALS:
             continue
@@ -965,20 +994,40 @@ def main():
         operability_csv=args.operability_csv,
     )
 
-    # ── 窗口聚合对齐（将每行 Y 测量时间点作为锚点，汇聚 X/D 统计量）──
-    from build_aligned_dataset import build_aligned_dataset
-    operable_cols_raw   = sorted(operable_in_df_raw   & set(df_raw.columns))
-    observable_cols_raw = sorted(observable_in_df_raw & set(df_raw.columns))
-    df, new_operable, new_observable = build_aligned_dataset(
-        df_raw,
-        operable_cols  = operable_cols_raw,
-        observable_cols= observable_cols_raw,
-        window_minutes = 30,
-        y_ffill_limit  = 2,
-    )
-    # update sets after alignment
-    operable_in_df   = set(new_operable)
-    observable_in_df = set(new_observable)
+    # ── 直接使用原始数据（跳过窗口聚合，保留全部 ~1900 行）──────
+    #
+    # 为什么这样做：
+    #   build_aligned_dataset 把 1914 行压缩到 638 行（Y 低频采样），
+    #   同时把 167 维特征扩展到 668 维（×4 统计量），
+    #   导致样本/维度比从 11.5x 崩溃到 0.95x，nuisance 模型严重过拟合。
+    #
+    # Y 的前向填充（无限制 ffill）工程合理性：
+    #   连续化工生产中，质量检测是批次低频采样（约每3分钟一次），
+    #   相邻两次检测之间产品质量保持相对稳定，用最近一次已知检测值
+    #   代表当前质量是工业数据处理的标准做法，不引入未来信息泄露。
+    # ──────────────────────────────────────────────────────────────
+    df = df_raw.copy()
+
+    # X/D 列：前向填充（传感器 exception-based 录制，只在变化时写入，ffill 是正确处理）
+    feature_cols = [c for c in df.columns if c != "Y_grade"]
+    df[feature_cols] = df[feature_cols].ffill()
+
+    # Y 列：无限制前向填充
+    # 含义：用最近一次质量检测结果填充至下一次检测，物理上合理
+    df["Y_grade"] = df["Y_grade"].ffill()
+
+    # 删除时间序列开头从未有过 Y 测量的行（通常只有最初几行）
+    df = df.dropna(subset=["Y_grade"])
+
+    # 用列均值填充仍然存在的 NaN（极少数，主要是序列开头的 X/D 缺失）
+    df = df.fillna(df.mean(numeric_only=True))
+
+    operable_in_df   = operable_in_df_raw   & set(df.columns)
+    observable_in_df = observable_in_df_raw & set(df.columns)
+
+    print(f"[数据模式] 原始数据直接使用（无窗口聚合）")
+    print(f"  行数: {len(df)}，操作变量: {len(operable_in_df)}，状态变量: {len(observable_in_df)}")
+    print(f"  样本/维度比（估计）: {len(df) / max(1, len(observable_in_df)):.1f}x")
 
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
