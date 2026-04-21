@@ -36,7 +36,7 @@ OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "因果发现
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # TCDF 深度学习超参
-EPOCHS = 30
+EPOCHS = 100          # 30→100：确保注意力权重在小初值下充分收敛（原 30 轮不够）
 BATCH_SIZE = 64
 WINDOW_SIZE = 15
 KERNEL_SIZE = 4
@@ -180,6 +180,21 @@ def run_tcdf_space_time_dag(line: str = "xin1"):
     for i, w in enumerate(attn_y_global):
         if w > threshold:
             G.add_edge(valid_vars[i], "Y_grade", weight=float(w))
+
+    # ── 强制 DAG 后处理：移除最弱环边（注意力阈值不保证无环）──
+    removed_cycles = 0
+    while not nx.is_directed_acyclic_graph(G):
+        try:
+            cycle = nx.find_cycle(G)
+        except nx.NetworkXNoCycle:
+            break
+        weakest = min(cycle, key=lambda e: G[e[0]][e[1]].get("weight", 0.0))
+        G.remove_edge(weakest[0], weakest[1])
+        removed_cycles += 1
+    if removed_cycles:
+        print(f"[TCDF] DAG 强制后处理：移除 {removed_cycles} 条最弱环边，图现为 DAG ✓")
+    else:
+        print("[TCDF] 图已是 DAG，无需后处理 ✓")
 
     out_graphml = os.path.join(OUT_DIR, f"tcdf_space_time_dag_{line}.graphml")
     nx.write_graphml(G, out_graphml)
