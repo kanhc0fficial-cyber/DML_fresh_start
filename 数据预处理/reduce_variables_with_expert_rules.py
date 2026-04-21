@@ -1,14 +1,21 @@
 """
-专家知识驱动的“聚合优先”降维脚本。
+专家知识驱动的"聚合优先"降维脚本（v3）。
 
 核心原则：
-1. 先做工艺语义聚合，再做少量删除。
-2. 不靠正则推断变量含义，而是基于：
-   - 专家知识文档
-   - 当前变量清单
-   - 当前 parquet 中已存在的精确变量名 / 精确注释
-3. 对用户明确要求保留的流程概念，即使当前数据源缺失，也在输出中保留占位列（全 NaN），
-   以保证概念层 schema 不丢失。
+1. 以 non_collinear_representative_vars_operability.csv 中的 470 个代表变量为基础，
+   全部默认直通保留（keep_individual）。
+2. 仅对真正并联的同类设备变量做显式聚合（aggregate）：
+   - 所有聚合组均使用精确变量名列表，不做任何正则或文字匹配。
+   - 主要聚合对象：20 台强磁机（MC2_QC501-QC610，115 个代表变量 → 12 个概念特征）、
+     6 台塔磨主电机及温度（MC1_TM*）、12 台三旋给矿泵（MC1_GKB*）等。
+3. 不设置占位列——确实没有源变量的概念直接跳过。
+4. 对每个代表变量均有明确的处置决定（aggregate / keep_individual）记录在分析 CSV 中。
+
+旋流器开关状态说明（2026-04）：
+  经穷举检索，当前 modeling_dataset_final.parquet 中不存在任何"旋流器开关状态"类列。
+  ABC 元数据中 204 个 _ZT 变量均为浮选药剂阀、鼓风机阀、分配器阀等，无一与旋流器开关相关。
+  MC1 塔磨旋流器相关变量不在 parquet 中的是：泵频给定（_AO）、PID 参数（_P/_I）、阀位设定（_SP）、浓度计（_DE）。
+  若实际 DCS 中存在此信号，需从未接入当前数据集的子系统补充。
 """
 
 from __future__ import annotations
@@ -37,20 +44,19 @@ DEFAULT_CONCEPT_CSV = RESULT_DIR / "expert_aggregation_concepts.csv"
 
 
 @dataclass(frozen=True)
-class ConceptSpec:
-    feature_name: str
-    feature_cn: str
-    process: str
-    role: str
-    method: str
-    source_vars: tuple[str, ...]
-    required: bool
-    reason: str
-    missing_policy: str = "placeholder"
+class AggGroup:
+    """一组并联设备同类变量 → 聚合为单一概念特征。"""
+    feature_name: str          # 输出列名
+    feature_cn: str            # 中文名
+    process: str               # 所属工艺段
+    role: str                  # 工艺角色
+    method: str                # 聚合方法 (mean / sum / max / any / first)
+    source_vars: tuple[str, ...]  # 精确变量名列表（来自代表变量集）
+    reason: str                # 聚合理由
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="专家知识驱动的聚合优先降维脚本")
+    parser = argparse.ArgumentParser(description="专家知识驱动的聚合优先降维脚本 v3")
     parser.add_argument("--variables-csv", default=str(DEFAULT_VARIABLES_CSV))
     parser.add_argument("--abc-csv", default=str(DEFAULT_OUTPUT_ABC_CSV))
     parser.add_argument("--input-parquet", default=str(DEFAULT_INPUT_PARQUET))
@@ -69,22 +75,8 @@ def normalize_text(value: object) -> str:
     return "" if text.lower() == "nan" else text
 
 
-def collect_exact_comment_vars(
-    comment_to_names: dict[str, list[str]],
-    parquet_cols: set[str],
-    comments: list[str],
-) -> list[str]:
-    result: list[str] = []
-    for comment in comments:
-        for name in comment_to_names.get(comment, []):
-            if name in parquet_cols and name not in result:
-                result.append(name)
-    return result
-
-
-def build_comment_maps(abc_df: pd.DataFrame) -> tuple[dict[str, str], dict[str, list[str]], dict[str, str]]:
+def build_comment_maps(abc_df: pd.DataFrame) -> tuple[dict[str, str], dict[str, str]]:
     name_to_comment: dict[str, str] = {}
-    comment_to_names: dict[str, list[str]] = {}
     name_to_group: dict[str, str] = {}
     for _, row in abc_df.iterrows():
         name = normalize_text(row.get("NAME", ""))
@@ -94,16 +86,14 @@ def build_comment_maps(abc_df: pd.DataFrame) -> tuple[dict[str, str], dict[str, 
         group = normalize_text(row.get("Group", ""))
         if comment:
             name_to_comment[name] = comment
-            comment_to_names.setdefault(comment, []).append(name)
         if group:
             name_to_group[name] = group
-    return name_to_comment, comment_to_names, name_to_group
+    return name_to_comment, name_to_group
 
 
 def aggregate_series(df: pd.DataFrame, vars_in_df: list[str], method: str) -> pd.Series:
     if not vars_in_df:
         return pd.Series(np.nan, index=df.index, dtype="float64")
-
     sub = df[vars_in_df].apply(pd.to_numeric, errors="coerce")
     if method == "first":
         return sub.iloc[:, 0]
@@ -115,19 +105,18 @@ def aggregate_series(df: pd.DataFrame, vars_in_df: list[str], method: str) -> pd
         return sub.max(axis=1)
     if method == "any":
         return sub.max(axis=1, skipna=True)
-    if method == "delta_sum":
-        delta = sub.diff().clip(lower=0)
-        return delta.sum(axis=1, min_count=1)
     raise ValueError(f"未知聚合方法: {method}")
 
 
-def build_concepts(
-    parquet_cols: set[str],
-    comment_to_names: dict[str, list[str]],
-) -> list[ConceptSpec]:
-    concepts: list[ConceptSpec] = []
+def define_parallel_groups() -> list[AggGroup]:
+    """
+    定义所有并联设备的聚合组。
+    每个组的 source_vars 为来自 non_collinear_representative_vars_operability.csv
+    的精确变量名，逐一核对确认，不依赖正则或文字匹配。
+    """
+    groups: list[AggGroup] = []
 
-    def add(
+    def g(
         feature_name: str,
         feature_cn: str,
         process: str,
@@ -135,438 +124,308 @@ def build_concepts(
         method: str,
         source_vars: list[str],
         reason: str,
-        required: bool = True,
-        missing_policy: str = "placeholder",
     ) -> None:
-        concepts.append(
-            ConceptSpec(
-                feature_name=feature_name,
-                feature_cn=feature_cn,
-                process=process,
-                role=role,
-                method=method,
-                source_vars=tuple(v for v in source_vars if v not in {"", None}),
-                required=required,
-                reason=reason,
-                missing_policy=missing_policy,
-            )
-        )
+        groups.append(AggGroup(
+            feature_name=feature_name,
+            feature_cn=feature_cn,
+            process=process,
+            role=role,
+            method=method,
+            source_vars=tuple(source_vars),
+            reason=reason,
+        ))
 
-    # 上游边界
-    add("raw_ore_grade", "原矿品位", "边界条件", "原矿品位", "first", ["CXXY_PW"], "专家知识明确要求保留原矿品位。")
-    add("raw_ore_magnetic_iron", "原矿磁性铁", "边界条件", "磁性铁", "first", ["CXXY_CXN"], "专家知识明确要求保留原矿磁性铁。")
-    add("raw_ore_ferrous_iron", "原矿亚铁", "边界条件", "亚铁", "first", ["CXXY_YT"], "专家知识明确要求保留原矿亚铁。")
-    add("raw_ore_siderite", "原矿碳酸铁", "边界条件", "碳酸铁", "first", ["CXXY_TSN"], "专家知识明确要求保留原矿碳酸铁。")
+    # ──────────────────────────────────────────────────────────────────────────
+    # 磁选（强磁分选机 MC2_QC501-MC2_QC610）
+    # 代表变量集中共 115 个，分 12 种测量类型，每种聚合为一个概念特征。
+    # 各机同类测量之间高度重复（并联运行），专家知识要求按概念层保留。
+    # ──────────────────────────────────────────────────────────────────────────
 
-    # 破碎：当前数据源缺失，保留 schema
-    for feature_name, feature_cn in [
-        ("agg_crushing_belt_status", "破碎_皮带启停"),
-        ("agg_crushing_belt_frequency", "破碎_皮带频率"),
-        ("agg_crushing_level_height", "破碎_料位高度"),
-        ("agg_crushing_feed_rate", "破碎_给矿量"),
-        ("agg_crushing_cumulative_amount", "破碎_累积量"),
-    ]:
-        add(feature_name, feature_cn, "破碎", feature_cn.split("_", 1)[1], "mean", [], "用户要求必须保留，但当前 parquet 与变量清单中未发现对应源变量。")
+    # 1. 励磁电压（13 台有代表变量）
+    g("agg_mag_excit_voltage", "磁选_励磁电压", "磁选", "励磁电压", "mean",
+      ["MC2_QC501_LCDY_AI", "MC2_QC502_LCDY_AI", "MC2_QC506_LCDY_AI",
+       "MC2_QC507_LCDY_AI", "MC2_QC508_LCDY_AI", "MC2_QC510_LCDY_AI",
+       "MC2_QC601_LCDY_AI", "MC2_QC602_LCDY_AI", "MC2_QC606_LCDY_AI",
+       "MC2_QC607_LCDY_AI", "MC2_QC608_LCDY_AI", "MC2_QC609_LCDY_AI",
+       "MC2_QC610_LCDY_AI"],
+      "强磁机励磁电压是磁选强度的直接控制量，13 台并联机器取均值反映全区励磁水平。")
 
-    # 球磨：当前数据源同样缺关键变量，保留 schema
-    for feature_name, feature_cn in [
-        ("agg_grinding_cyclone_pressure", "球磨_旋流器压力"),
-        ("agg_grinding_sand_add_water", "球磨_沉沙补加水"),
-        ("agg_grinding_cyclone_pool_level", "球磨_旋流器泵池液位"),
-        ("agg_grinding_cyclone_pump_frequency", "球磨_旋流器泵频"),
-        ("agg_grinding_ball_mill_feed_rate", "球磨_球磨给矿量"),
-        ("agg_grinding_pendulum_state", "球磨_摆式状态"),
-    ]:
-        add(feature_name, feature_cn, "球磨", feature_cn.split("_", 1)[1], "mean", [], "用户要求必须保留，但当前 parquet 与变量清单中未发现对应源变量。")
+    # 2. 励磁电流（12 台有代表变量）
+    g("agg_mag_excit_current", "磁选_励磁电流", "磁选", "励磁电流", "mean",
+      ["MC2_QC501_LCDL_AI", "MC2_QC502_LCDL_AI", "MC2_QC503_LCDL_AI",
+       "MC2_QC504_LCDL_AI", "MC2_QC505_LCDL_AI", "MC2_QC507_LCDL_AI",
+       "MC2_QC508_LCDL_AI", "MC2_QC510_LCDL_AI", "MC2_QC601_LCDL_AI",
+       "MC2_QC607_LCDL_AI", "MC2_QC608_LCDL_AI", "MC2_QC609_LCDL_AI"],
+      "强磁机励磁电流是磁场强度的实际测量值，12 台并联机器取均值。")
 
-    # 磁选：使用精确注释归集
-    add(
-        "agg_magnetic_excitation_voltage",
-        "磁选_励磁电压",
-        "磁选",
-        "励磁电压",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["励磁电压值"]),
-        "多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。",
-    )
-    add(
-        "agg_magnetic_excitation_current",
-        "磁选_励磁电流",
-        "磁选",
-        "励磁电流",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["励磁电流值"]),
-        "多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。",
-    )
-    add(
-        "agg_magnetic_level",
-        "磁选_液位",
-        "磁选",
-        "液位",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["选矿液位"]),
-        "液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。",
-    )
-    add(
-        "agg_magnetic_coil_temperature",
-        "磁选_线圈温度",
-        "磁选",
-        "线圈温度",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["线圈温度值"]),
-        "用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。",
-    )
-    add(
-        "agg_magnetic_motor_current_proxy",
-        "磁选_电机电流代理",
-        "磁选",
-        "电机电流",
-        "mean",
-        [
-            "MC2_RC101_DL_AI", "MC2_RC102_DL_AI", "MC2_RC103_DL_AI", "MC2_RC104_DL_AI",
-            "MC2_RC105_DL_AI", "MC2_RC106_DL_AI", "MC2_RC107_DL_AI", "MC2_RC109_DL_AI",
-            "MC2_RC110_DL_AI", "MC2_RC111_DL_AI", "MC2_RC112_DL_AI", "MC2_JYB2_DL_AI",
-        ],
-        "当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。",
-    )
-    add(
-        "agg_magnetic_tailings_valve_opening",
-        "磁选_尾矿阀门开度",
-        "磁选",
-        "尾矿阀门",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["1#尾矿阀门实际开度反馈值", "2#尾矿阀门实际开度反馈值"]),
-        "专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。",
-        required=False,
-    )
-    add(
-        "agg_magnetic_flush_water_pressure",
-        "磁选_冲矿水压力",
-        "磁选",
-        "冲矿水压力",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["冲矿水压力值", "冲矿水入口压力值", "冲矿水出口压力值"]),
-        "冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。",
-        required=False,
-    )
-    add(
-        "agg_magnetic_blowdown_valve_opening",
-        "磁选_排污阀门开度",
-        "磁选",
-        "排污阀门",
-        "mean",
-        collect_exact_comment_vars(comment_to_names, parquet_cols, ["排污阀门开度实际值"]),
-        "排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。",
-        required=False,
-    )
+    # 3. 线圈温度（10 台有代表变量）
+    g("agg_mag_coil_temp", "磁选_线圈温度", "磁选", "线圈温度", "mean",
+      ["MC2_QC501_XQWD_AI", "MC2_QC503_XQWD_AI", "MC2_QC504_XQWD_AI",
+       "MC2_QC506_XQWD_AI", "MC2_QC507_XQWD_AI", "MC2_QC508_XQWD_AI",
+       "MC2_QC601_XQWD_AI", "MC2_QC606_XQWD_AI", "MC2_QC607_XQWD_AI",
+       "MC2_QC609_XQWD_AI"],
+      "线圈温度反映磁选机热负荷状态，取均值作为全区代表温度。")
 
-    # 塔磨
-    add(
-        "agg_tower_pump_pool_makeup_water",
-        "塔磨_泵池补加水量",
-        "塔磨",
-        "泵池补加水量",
-        "mean",
-        ["MC1_FET503_AI"],
-        "当前数据中仅发现明确的泵池加水流量变量，按用户要求直接保留。",
-    )
-    add(
-        "agg_tower_pump_pool_level",
-        "塔磨_泵池液位",
-        "塔磨",
-        "泵池液位",
-        "mean",
-        ["MC1_LET101_AI", "MC1_LET301_AI", "MC1_LET501_AI"],
-        "多个给矿泵池液位属于并行塔磨回路，按概念聚合。",
-    )
-    add(
-        "agg_tower_cyclone_feed_pump_frequency",
-        "塔磨_旋流器泵池泵频",
-        "塔磨",
-        "旋流器泵池泵频",
-        "mean",
-        [
-            "MC1_GKB701_HZ", "MC1_GKB702_HZ", "MC1_GKB703_HZ", "MC1_GKB704_HZ",
-            "MC1_GKB705_HZ", "MC1_GKB706_HZ", "MC1_GKB707_HZ", "MC1_GKB708_HZ",
-            "MC1_GKB709_HZ", "MC1_GKB710_HZ", "MC1_GKB711_HZ", "MC1_GKB712_HZ",
-        ],
-        "塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。",
-    )
-    add(
-        "agg_tower_cyclone_overflow_pump_frequency",
-        "塔磨_旋流器溢流泵频",
-        "塔磨",
-        "旋流器溢流泵频",
-        "mean",
-        [
-            "MC2_YLB802_HZ", "MC2_YLB803_HZ", "MC2_YLB804_HZ", "MC2_YLB805_HZ",
-            "MC2_YLB806_HZ", "MC2_YLB807_HZ", "MC2_YLB808_HZ", "MC2_YLB809_HZ",
-            "MC2_YLB810_HZ", "MC2_YLB811_HZ", "MC2_YLB812_HZ",
-        ],
-        "溢流泵频率用于补强塔磨旋流器回路泵频表征。",
-        required=False,
-    )
-    add(
-        "agg_tower_cyclone_add_water",
-        "塔磨_旋流器补加水量",
-        "塔磨",
-        "旋流器补加水量",
-        "mean",
-        ["MC1_FET101_AI", "MC1_FET201_AI", "MC1_FET301_AI", "MC1_FET401_AI", "MC1_FET501_AI", "MC1_FET601_AI"],
-        "旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。",
-    )
-    add(
-        "agg_tower_cyclone_switch_state",
-        "塔磨_旋流器开关状态",
-        "塔磨",
-        "旋流器开关状态",
-        "any",
-        [],
-        "用户要求必须保留，但当前 parquet 与变量清单中未发现明确的旋流器开关状态列。",
-    )
-    add(
-        "agg_tower_motor_current",
-        "塔磨_主电机电流",
-        "塔磨",
-        "主电机电流",
-        "mean",
-        [
-            "MC1_TM201_ZDJ_DL_AI", "MC1_TM202_ZDJ_DL_AI", "MC1_TM203_ZDJ_DL_AI",
-            "MC1_TM204_ZDJ_DL_AI", "MC1_TM205_ZDJ_DL_AI", "MC1_TM206_ZDJ_DL_AI",
-        ],
-        "塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。",
-        required=False,
-    )
+    # 4. 1# 尾矿阀门开度（10 台）
+    g("agg_mag_tailings_valve1", "磁选_1号尾矿阀开度", "磁选", "尾矿阀1开度", "mean",
+      ["MC2_QC501_WKF1_AI", "MC2_QC509_WKF1_AI", "MC2_QC510_WKF1_AI",
+       "MC2_QC601_WKF1_AI", "MC2_QC603_WKF1_AI", "MC2_QC606_WKF1_AI",
+       "MC2_QC607_WKF1_AI", "MC2_QC608_WKF1_AI", "MC2_QC609_WKF1_AI",
+       "MC2_QC610_WKF1_AI"],
+      "1# 尾矿阀门开度控制排尾量，10 台并联取均值。")
 
-    # 浮选
-    add(
-        "agg_flotation_feed_rate",
-        "浮选_给矿量",
-        "浮选",
-        "给矿量",
-        "sum",
-        ["FX_FT_1702", "FX_FT_2601", "FX_FT_2602", "FX_FT_2701", "FX_FT_2702"],
-        "用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。",
-    )
-    add(
-        "agg_flotation_reagent_cao_dose",
-        "浮选_CaO加药量代理",
-        "浮选",
-        "CaO加药量",
-        "mean",
-        ["FX_HGB2201_F", "FX_HGB2201_F_W", "FX_HGB2202_F", "FX_HGB2203_F", "FX_HGB2204_F", "FX_HGB2204_F_W"],
-        "CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。",
-    )
-    add(
-        "agg_flotation_reagent_naoh_dose",
-        "浮选_NaOH加药量代理",
-        "浮选",
-        "NaOH加药量",
-        "mean",
-        ["FX_LGB2701_F", "FX_LGB2702_F", "FX_LGB2702_F_W"],
-        "NaOH 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。",
-    )
-    add(
-        "agg_flotation_reagent_tdii_dose",
-        "浮选_TDII加药量代理",
-        "浮选",
-        "TD-II加药量",
-        "mean",
-        [
-            "FX_LGB2301_F", "FX_LGB2301_F_W", "FX_LGB2302_F", "FX_LGB2302_F_W",
-            "FX_LGB2303_F", "FX_LGB2303_F_W", "FX_LGB2304_F", "FX_LGB2304_F_W",
-            "FX_LGB2401_F", "FX_LGB2401_F_W", "FX_LGB2402_F", "FX_LGB2402_F_W",
-            "FX_LGB2403_F", "FX_LGB2403_F_W", "FX_LGB2404_F", "FX_LGB2404_F_W",
-        ],
-        "TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。",
-    )
-    add(
-        "agg_flotation_reagent_k6_dose",
-        "浮选_K6-1加药量代理",
-        "浮选",
-        "K6-1加药量",
-        "mean",
-        ["FX_LGB2502_F", "FX_LGB2502_F_W", "FX_LGB2602_F", "FX_LGB2602_F_W"],
-        "K6-1 为关键抑制剂支路，按泵频和设定做概念层聚合。",
-    )
-    add(
-        "agg_flotation_froth_thickness",
-        "浮选_泡沫厚度",
-        "浮选",
-        "泡沫厚度",
-        "mean",
-        [
-            "FX_X2CX3_AI1", "FX_X2JX_AI1", "FX_X2SX1_AI1", "FX_X2SX2_AI1", "FX_X2CX1_AI1", "FX_X2SX3_AI1",
-            "FX_X1SX2_AI1", "FX_X1SX3_AI1", "FX_X1CX1_AI1", "FX_X1CX2_AI1", "FX_X1CX3_AI1", "FX_X1JX_AI1", "FX_X2CX2_AI1",
-        ],
-        "多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。",
-    )
-    add(
-        "agg_flotation_ph",
-        "浮选_PH值",
-        "浮选",
-        "PH值",
-        "mean",
-        ["FX_AT_2102", "FX_AT_2103", "FX_AT_2104", "FX_AT_1101", "FX_AT_1102", "FX_AT_1103", "FX_AT_1104"],
-        "pH 是浮选药剂体系核心变量，按各测点均值聚合。",
-    )
-    add(
-        "agg_flotation_airflow_actual",
-        "浮选_充气量实际值",
-        "浮选",
-        "充气量",
-        "mean",
-        [
-            "FX_X2CX3_AI5", "FX_X2CX3_AI9", "FX_X2JX_AI5", "FX_X2JX_AI9", "FX_X2JX_AI13",
-            "FX_X2SX1_AI5", "FX_X2SX1_AI9", "FX_X2SX1_AI13", "FX_X2CX1_AI5", "FX_X2SX2_AI5", "FX_X2SX2_AI9",
-            "FX_X2SX3_AI5", "FX_X2SX3_AI9", "FX_X1SX1_AI5", "FX_X1SX1_AI9", "FX_X1SX1_AI13",
-            "FX_X1SX2_AI5", "FX_X1SX2_AI9", "FX_X1SX3_AI5", "FX_X1SX3_AI9", "FX_X1CX1_AI5",
-            "FX_X1CX1_AI9", "FX_X1CX2_AI5", "FX_X1CX2_AI9", "FX_X1CX3_AI5", "FX_X1CX3_AI9",
-            "FX_X1JX_AI5", "FX_X1JX_AI9", "FX_X1JX_AI13", "FX_X2CX1_AI9", "FX_X2CX2_AI5", "FX_X2CX2_AI9",
-        ],
-        "浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。",
-    )
-    add(
-        "agg_flotation_airflow_setpoint",
-        "浮选_充气量设定值",
-        "浮选",
-        "充气量设定",
-        "mean",
-        [
-            "FX_X2JX_AI11", "FX_X2JX_AI15", "FX_X2SX1_AI11", "FX_X2SX1_AI15",
-            "FX_X1JX_AI15", "FX_X1SX1_AI11", "FX_X1SX1_AI15", "FX_X1SX3_AI6",
-            "FX_X1CX1_AI6", "FX_X1CX2_AI6", "FX_X1CX3_AI6", "FX_X1JX_AI11",
-        ],
-        "设定值单列保留，以区分执行结果与控制意图。",
-        required=False,
-    )
-    add(
-        "agg_flotation_valve_opening",
-        "浮选_阀门开度",
-        "浮选",
-        "阀门开度",
-        "mean",
-        [
-            "FX_X2CX2_AI27", "FX_X2CX3_AI7", "FX_X2CX3_AI11", "FX_X2JX_AI3", "FX_X2CX1_AI7",
-            "FX_X2SX1_AI3", "FX_X2SX1_AI7", "FX_X2SX1_AI38", "FX_X2SX2_AI4", "FX_X2CX1_AI12",
-            "FX_X2CX2_AI3", "FX_X2CX2_AI12", "FX_X1SX1_AI7", "FX_X1SX2_AI3", "FX_X1SX3_AI4",
-            "FX_X1SX3_AI7", "FX_X1SX3_AI12", "FX_X1CX3_AI3", "FX_X1JX_AI3",
-        ],
-        "用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。",
-    )
-    add(
-        "agg_flotation_tailings_pool_level",
-        "浮选_尾矿相关泵池液位",
-        "浮选",
-        "尾矿泵池液位",
-        "mean",
-        ["FX_LT_1603", "FX_LT_1604", "FX_LT_2602", "FX_LT_2603", "FX_LT_2604", "FX_LT_1605", "FX_LT_2605", "FX_LT_1701"],
-        "尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。",
-        required=False,
-    )
-    add(
-        "agg_flotation_tailings_froth_image",
-        "浮选_尾矿泡沫图像",
-        "浮选",
-        "尾矿泡沫图像",
-        "mean",
-        [],
-        "专家知识要求该概念，但当前 parquet 中没有相机/RGB图像列，保留占位 schema。",
-    )
+    # 5. 2# 尾矿阀门开度（14 台）
+    g("agg_mag_tailings_valve2", "磁选_2号尾矿阀开度", "磁选", "尾矿阀2开度", "mean",
+      ["MC2_QC501_WKF2_AI", "MC2_QC502_WKF2_AI", "MC2_QC503_WKF2_AI",
+       "MC2_QC504_WKF2_AI", "MC2_QC505_WKF2_AI", "MC2_QC506_WKF2_AI",
+       "MC2_QC507_WKF2_AI", "MC2_QC508_WKF2_AI", "MC2_QC510_WKF2_AI",
+       "MC2_QC602_WKF2_AI", "MC2_QC606_WKF2_AI", "MC2_QC607_WKF2_AI",
+       "MC2_QC609_WKF2_AI", "MC2_QC610_WKF2_AI"],
+      "2# 尾矿阀门开度与 1# 合并可看出阀门调节整体状态，14 台并联取均值。")
 
-    return concepts
+    # 6. 排污阀门开度（10 台）
+    g("agg_mag_blowdown_valve", "磁选_排污阀开度", "磁选", "排污阀开度", "mean",
+      ["MC2_QC501_PWF_AI", "MC2_QC502_PWF_AI", "MC2_QC503_PWF_AI",
+       "MC2_QC507_PWF_AI", "MC2_QC510_PWF_AI", "MC2_QC606_PWF_AI",
+       "MC2_QC607_PWF_AI", "MC2_QC608_PWF_AI", "MC2_QC609_PWF_AI",
+       "MC2_QC610_PWF_AI"],
+      "排污阀开度反映磁选机排矿状态，10 台并联取均值。")
+
+    # 7. 脉动电机频率（19 台，全区最多）
+    g("agg_mag_pulsation_freq", "磁选_脉动电机频率", "磁选", "脉动频率", "mean",
+      ["MC2_QC501_MDPL_AI", "MC2_QC502_MDPL_AI", "MC2_QC503_MDPL_AI",
+       "MC2_QC504_MDPL_AI", "MC2_QC505_MDPL_AI", "MC2_QC506_MDPL_AI",
+       "MC2_QC507_MDPL_AI", "MC2_QC508_MDPL_AI", "MC2_QC509_MDPL_AI",
+       "MC2_QC510_MDPL_AI", "MC2_QC601_MDPL_AI", "MC2_QC602_MDPL_AI",
+       "MC2_QC603_MDPL_AI", "MC2_QC604_MDPL_AI", "MC2_QC606_MDPL_AI",
+       "MC2_QC607_MDPL_AI", "MC2_QC608_MDPL_AI", "MC2_QC609_MDPL_AI",
+       "MC2_QC610_MDPL_AI"],
+      "脉动频率直接影响磁选分离效果，19 台并联取均值为全区脉动水平代表。")
+
+    # 8. 转环电机频率（13 台）
+    g("agg_mag_ring_freq", "磁选_转环频率", "磁选", "转环频率", "mean",
+      ["MC2_QC501_ZHPL_AI", "MC2_QC502_ZHPL_AI", "MC2_QC507_ZHPL_AI",
+       "MC2_QC508_ZHPL_AI", "MC2_QC509_ZHPL_AI", "MC2_QC510_ZHPL_AI",
+       "MC2_QC601_ZHPL_AI", "MC2_QC602_ZHPL_AI", "MC2_QC604_ZHPL_AI",
+       "MC2_QC607_ZHPL_AI", "MC2_QC608_ZHPL_AI", "MC2_QC609_ZHPL_AI",
+       "MC2_QC610_ZHPL_AI"],
+      "转环频率控制磁选机矿浆处理速率，13 台并联取均值。")
+
+    # 9. 选矿液位（9 台）
+    g("agg_mag_level", "磁选_选矿液位", "磁选", "选矿液位", "mean",
+      ["MC2_QC501_XKYW_AI", "MC2_QC504_XKYW_AI", "MC2_QC505_XKYW_AI",
+       "MC2_QC507_XKYW_AI", "MC2_QC508_XKYW_AI", "MC2_QC601_XKYW_AI",
+       "MC2_QC606_XKYW_AI", "MC2_QC609_XKYW_AI", "MC2_QC610_XKYW_AI"],
+      "磁选槽内液位反映矿浆充填程度，9 台并联取均值。注：部分仪表精度较低。")
+
+    # 10. 冲矿水压力（含入口、压力、出口三类测点，共 5 个代表变量）
+    #     CKSYL（总）: QC508, QC510, QC610；CKSRKYL（入口）: QC502；CKSCKYL（出口）: QC609
+    g("agg_mag_flush_water_pressure", "磁选_冲矿水压力", "磁选", "冲矿水压力", "mean",
+      ["MC2_QC502_CKSRKYL_AI",
+       "MC2_QC508_CKSYL_AI", "MC2_QC510_CKSYL_AI", "MC2_QC610_CKSYL_AI",
+       "MC2_QC609_CKSCKYL_AI"],
+      "冲矿水压力（入口/总/出口）反映磁选区冲洗条件，5 个代表测点取均值。")
+
+    # 11. 转环电机 A 相电流代理（MC2_RC 磁选机电流，5 个代表变量：DL*2 + DY*3）
+    #     注：MC2_RC* 是磁选机主电路电流/电压测量，DL=电流，DY=电压
+    g("agg_mag_motor_current_rc", "磁选_主电机A相电流", "磁选", "电机电流", "mean",
+      ["MC2_RC101_DL_AI", "MC2_RC102_DL_AI"],
+      "MC2_RC101/102 的 A 相电流是磁选机主电机电流的代表变量，2 台取均值。")
+
+    g("agg_mag_motor_voltage_rc", "磁选_主电机BC线电压", "磁选", "电机电压", "mean",
+      ["MC2_RC101_DY_AI", "MC2_RC102_DY_AI", "MC2_RC106_DY_AI"],
+      "MC2_RC101/102/106 的 BC 线电压是磁选机主电机电压代表，3 台取均值。")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 塔磨（MC1_TM201-MC1_TM206，6 台）
+    # 代表变量集中共 15 个，分为 3 类可聚合测量 + 4 个单独代表
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 12. 塔磨主电机电流（5 台有代表变量）
+    g("agg_tm_motor_current", "塔磨_主电机电流", "塔磨", "主电机电流", "mean",
+      ["MC1_TM201_ZDJ_DL_AI", "MC1_TM202_ZDJ_DL_AI",
+       "MC1_TM204_ZDJ_DL_AI", "MC1_TM205_ZDJ_DL_AI", "MC1_TM206_ZDJ_DL_AI"],
+      "6 台塔磨并联运行，主电机电流反映各机磨矿载荷，5 台有代表变量，取均值。")
+
+    # 13. 塔磨减速机油池温度（2 台有代表变量）
+    g("agg_tm_reducer_oil_temp", "塔磨_减速机油池温度", "塔磨", "减速机油温", "mean",
+      ["MC1_TM201_JSJ_YC_WD_AI", "MC1_TM204_JSJ_YC_WD_AI"],
+      "减速机油池温度反映润滑状态，2 台有代表变量，取均值。")
+
+    # 14. 塔磨减速机出油口温度（4 台有代表变量）
+    g("agg_tm_reducer_outlet_temp", "塔磨_减速机出油口温度", "塔磨", "减速机出油温", "mean",
+      ["MC1_TM201_JSJ_CYK_WD_AI", "MC1_TM204_JSJ_CYK_WD_AI",
+       "MC1_TM205_JSJ_CYK_WD_AI", "MC1_TM206_JSJ_CYK_WD_AI"],
+      "减速机出油口温度是润滑系统实时热状态，4 台有代表变量，取均值。")
+
+    # TM204_HDZC_1_WD_AI（滑动轴承1#温度）→ keep_individual（唯一代表）
+    # TM204_ZDJ_DZ_A_WD_AI（主电机定子A温度）→ keep_individual
+    # TM206_HDZC_2_WD_AI（滑动轴承2#温度）→ keep_individual
+    # TM206_ZDJ_DZ_B_WD_AI（主电机定子B温度）→ keep_individual
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 塔磨区三次旋流器给矿泵（MC1_GKB701-MC1_GKB712，12 台）
+    # 代表变量集中共 10 个：8 个 DL（电流）+ 2 个 HZ（频率反馈）
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 15. 三旋给矿泵电流（8 台）
+    g("agg_tm_cyclone_pump_current", "塔磨_三旋给矿泵电流", "塔磨", "给矿泵电流", "mean",
+      ["MC1_GKB702_DL", "MC1_GKB703_DL", "MC1_GKB704_DL", "MC1_GKB706_DL",
+       "MC1_GKB707_DL", "MC1_GKB708_DL", "MC1_GKB710_DL", "MC1_GKB711_DL"],
+      "12 台三旋给矿泵并联，8 台有电流代表变量，取均值反映泵组整体负荷。")
+
+    # 16. 三旋给矿泵频率反馈（2 台）
+    g("agg_tm_cyclone_pump_freq", "塔磨_三旋给矿泵频率", "塔磨", "给矿泵频率", "mean",
+      ["MC1_GKB709_HZ", "MC1_GKB711_HZ"],
+      "12 台三旋给矿泵中 2 台有频率反馈代表变量，取均值。")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 塔磨区三次分级旋流器水量/阀位/液位（MC1_FET / MC1_FV / MC1_LV / MC1_LET）
+    # 共 6 组旋流器，代表变量集中有 10+8+2+3=23 个
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 17. 旋流器沉砂加水管道流量（3 台有代表变量）
+    g("agg_tm_cyclone_sand_water_flow", "塔磨_旋流器沉砂加水流量", "塔磨", "沉砂加水量", "mean",
+      ["MC1_FET101_AI", "MC1_FET301_AI", "MC1_FET601_AI"],
+      "三次分级旋流器沉砂补水，6 组中 3 组有代表变量，取均值。")
+
+    # 18. 旋流器给矿管道流量（6 台有代表变量）
+    g("agg_tm_cyclone_feed_flow", "塔磨_旋流器给矿管道流量", "塔磨", "给矿流量", "mean",
+      ["MC1_FET102_AI", "MC1_FET202_AI", "MC1_FET302_AI",
+       "MC1_FET402_AI", "MC1_FET502_AI", "MC1_FET602_AI"],
+      "三次分级旋流器给矿流量，6 组均有代表变量，取均值反映整体给矿水平。")
+
+    # 19. 旋流器给矿泵池加水管道流量（FET503，仅 1 台）→ keep_individual
+
+    # 20. 旋流器沉砂加水阀位给定（5 台）
+    g("agg_tm_cyclone_sand_valve_setpoint", "塔磨_旋流器沉砂水阀位给定", "塔磨", "沉砂水阀给定", "mean",
+      ["MC1_FV101_AO", "MC1_FV201_AO", "MC1_FV301_AO", "MC1_FV401_AO", "MC1_FV501_AO"],
+      "旋流器沉砂加水阀位给定（AO），5 组并联取均值为控制意图代表。")
+
+    # 21. 旋流器沉砂加水阀位反馈（3 台）
+    g("agg_tm_cyclone_sand_valve_feedback", "塔磨_旋流器沉砂水阀位反馈", "塔磨", "沉砂水阀反馈", "mean",
+      ["MC1_FV101_AI", "MC1_FV201_AI", "MC1_FV401_AI"],
+      "旋流器沉砂加水阀位反馈（AI），3 组并联取均值，与给定一起反映阀门控制状态。")
+
+    # 22. 旋流器给矿泵池加水阀位给定（2 台）
+    g("agg_tm_cyclone_pool_valve_setpoint", "塔磨_旋流器泵池水阀位给定", "塔磨", "泵池水阀给定", "mean",
+      ["MC1_LV101_AO", "MC1_LV301_AO"],
+      "旋流器给矿泵池加水阀位给定，2 组并联取均值。")
+
+    # 23. 旋流器给矿泵池液位（3 台）
+    g("agg_tm_cyclone_pool_level", "塔磨_旋流器给矿泵池液位", "塔磨", "泵池液位", "mean",
+      ["MC1_LET101_AI", "MC1_LET301_AI", "MC1_LET501_AI"],
+      "三次分级旋流器给矿泵池液位，3 组并联取均值反映整体液位水平。")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 塔磨后段：旋流器溢流泵池液位（MC2_LET）
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 24. 三次分级旋流器溢流泵池液位（3 台）
+    g("agg_tm_cyclone_overflow_pool_level", "塔磨_旋流器溢流泵池液位", "塔磨", "溢流泵池液位", "mean",
+      ["MC2_LET_102_AI", "MC2_LET_302_AI", "MC2_LET_502_AI"],
+      "三次分级旋流器溢流泵池液位，3 个并联泵池取均值，反映后段矿浆缓冲状态。")
+
+    # 25. 旋流器溢流泵电流（MC2_YLB，4 台有代表变量）
+    g("agg_tm_overflow_pump_current", "塔磨_旋流器溢流泵电流", "塔磨", "溢流泵电流", "mean",
+      ["MC2_YLB802_DL", "MC2_YLB805_DL", "MC2_YLB806_DL", "MC2_YLB809_DL"],
+      "旋流器溢流泵电流反映泵组负荷，4 台有代表变量，取均值。")
+
+    # MC2_YLB811_HZ（溢流泵频率反馈，仅 1 台）→ keep_individual
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 事故泵（MC2_SGB，2 台有代表变量）
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 26. 事故泵频率
+    g("agg_accident_pump_freq", "尾矿_事故泵频率", "尾矿", "事故泵频率", "mean",
+      ["MC2_SGB1002_HZ", "MC2_SGB1003_HZ"],
+      "事故泵 2# 和 3# 为同类设备，频率取均值。")
+
+    # 27. 事故泵电流
+    g("agg_accident_pump_current", "尾矿_事故泵电流", "尾矿", "事故泵电流", "mean",
+      ["MC2_SGB1002_DL", "MC2_SGB1003_DL"],
+      "事故泵 2# 和 3# 为同类设备，电流取均值。")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # 底流泵站（MC2_ZJB，4 个代表变量）
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # 28. 底流泵站频率给定
+    g("agg_bottom_pump_freq_setpoint", "底流_渣浆泵频率给定", "底流", "频率给定", "mean",
+      ["MC2_ZJB02_AO", "MC2_ZJB03_AO"],
+      "底流泵站 2# 和 3# 渣浆泵为同类设备，频率给定取均值。")
+
+    # 29. 底流泵站电流
+    g("agg_bottom_pump_current", "底流_渣浆泵电流", "底流", "电流", "mean",
+      ["MC2_ZJB01_DL", "MC2_ZJB04_DL"],
+      "底流泵站 1# 和 4# 渣浆泵为同类设备，电流取均值。")
+
+    return groups
 
 
-def build_metadata(
-    variables_df: pd.DataFrame,
-    abc_df: pd.DataFrame,
-    extra_vars: set[str],
+def build_analysis_df(
+    rep_vars: list[str],
+    agg_groups: list[AggGroup],
+    rep_var_meta: dict[str, dict[str, str]],
 ) -> pd.DataFrame:
-    name_to_comment, _, name_to_group = build_comment_maps(abc_df)
-    var_map: dict[str, dict[str, str]] = {}
+    """为 470 个代表变量生成逐一处置分析表。"""
+    var_to_group: dict[str, AggGroup] = {}
+    for grp in agg_groups:
+        for v in grp.source_vars:
+            if v in var_to_group:
+                raise ValueError(f"变量 {v} 被分配到多个聚合组：{var_to_group[v].feature_name} 和 {grp.feature_name}")
+            var_to_group[v] = grp
 
-    for _, row in variables_df.iterrows():
-        name = normalize_text(row.get("Non_Collinear_Representative", ""))
-        if not name:
-            continue
-        var_map[name] = {
-            "Description_CN": normalize_text(row.get("Description_CN", "")) or name_to_comment.get(name, ""),
-            "Group": normalize_text(row.get("Group", "")) or name_to_group.get(name, ""),
-            "Source": "representative_csv",
-        }
-
-    for name in extra_vars:
-        if name not in var_map:
-            var_map[name] = {
-                "Description_CN": name_to_comment.get(name, ""),
-                "Group": name_to_group.get(name, ""),
-                "Source": "parquet_only",
-            }
-
-    rows = [{"Variable_Name": k, **v} for k, v in sorted(var_map.items())]
+    rows = []
+    for v in rep_vars:
+        meta = rep_var_meta.get(v, {})
+        grp = var_to_group.get(v)
+        if grp is not None:
+            action = "aggregate"
+            target = grp.feature_name
+            method = grp.method
+            process = grp.process
+            role = grp.role
+            reason = grp.reason
+        else:
+            action = "keep_individual"
+            target = v
+            method = "passthrough"
+            process = meta.get("process", "")
+            role = meta.get("Description_CN", "")
+            reason = "该变量没有并联同类信号，按专家知识保留为独立特征。"
+        rows.append({
+            "Variable_Name": v,
+            "Description_CN": meta.get("Description_CN", ""),
+            "Group_ABC": meta.get("Group_ABC", ""),
+            "Operability": meta.get("Operability", ""),
+            "Action": action,
+            "Output_Feature": target,
+            "Aggregation_Method": method,
+            "Process": process,
+            "Role": role,
+            "Reason": reason,
+        })
     return pd.DataFrame(rows)
 
 
-def build_analysis(metadata_df: pd.DataFrame, concepts: list[ConceptSpec], parquet_cols: set[str]) -> pd.DataFrame:
-    concept_rows = []
-    variable_to_concept: dict[str, ConceptSpec] = {}
-    for concept in concepts:
-        for var in concept.source_vars:
-            if var in variable_to_concept:
-                raise ValueError(f"变量 {var} 被重复分配到多个聚合概念。")
-            variable_to_concept[var] = concept
-        available_count = sum(1 for v in concept.source_vars if v in parquet_cols)
-        concept_rows.append(
-            {
-                "feature_name": concept.feature_name,
-                "feature_cn": concept.feature_cn,
-                "process": concept.process,
-                "role": concept.role,
-                "method": concept.method,
-                "source_var_count": len(concept.source_vars),
-                "available_var_count": available_count,
-                "required": "yes" if concept.required else "no",
-                "reason": concept.reason,
-                "placeholder_only": "yes" if len(concept.source_vars) == 0 else "no",
-            }
-        )
-
+def build_concept_df(agg_groups: list[AggGroup], df: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for _, row in metadata_df.sort_values("Variable_Name").iterrows():
-        var = row["Variable_Name"]
-        concept = variable_to_concept.get(var)
-        if concept is None:
-            action = "drop"
-            target = ""
-            method = ""
-            reason = "未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。"
-            process = ""
-            role = ""
-        else:
-            action = "aggregate" if len(concept.source_vars) > 1 else "keep_single"
-            target = concept.feature_name
-            method = concept.method
-            reason = concept.reason
-            process = concept.process
-            role = concept.role
-
-        rows.append(
-            {
-                "Variable_Name": var,
-                "Description_CN": row["Description_CN"],
-                "Group": row["Group"],
-                "Metadata_Source": row["Source"],
-                "Present_In_Input_Parquet": "yes" if var in parquet_cols else "no",
-                "Action": action,
-                "Aggregate_Target": target,
-                "Aggregation_Method": method,
-                "Process": process,
-                "Role": role,
-                "Reason": reason,
-            }
-        )
-
-    return pd.DataFrame(rows), pd.DataFrame(concept_rows)
+    for grp in agg_groups:
+        available = sum(1 for v in grp.source_vars if v in df.columns)
+        rows.append({
+            "feature_name": grp.feature_name,
+            "feature_cn": grp.feature_cn,
+            "process": grp.process,
+            "role": grp.role,
+            "method": grp.method,
+            "source_var_count": len(grp.source_vars),
+            "available_var_count": available,
+            "source_vars": "; ".join(grp.source_vars),
+            "reason": grp.reason,
+        })
+    return pd.DataFrame(rows)
 
 
 def render_report(
@@ -575,69 +434,62 @@ def render_report(
     input_parquet: Path,
     output_parquet: Path,
     reduced_df: pd.DataFrame,
-    expert_doc_excerpt: str,
 ) -> str:
     action_counts = analysis_df["Action"].value_counts().to_dict()
+    n_agg_groups = len(concept_df)
+    n_agg_vars = int(action_counts.get("aggregate", 0))
+    n_keep = int(action_counts.get("keep_individual", 0))
 
     lines = [
-        "# 专家知识驱动的聚合优先降维报告",
+        "# 专家知识驱动的聚合优先降维报告（v3）",
         "",
-        "## 本版策略",
+        "## 策略",
         "",
-        "- 本版以**聚合**为主，而不是以删除为主。",
-        "- 每个变量都被逐一映射为：`keep_single` / `aggregate` / `drop`。",
-        "- 用户明确要求保留的流程概念，即使当前数据源缺失，也保留为输出 schema 占位列。",
+        "- 以 470 个代表变量为基础，全部默认直通。",
+        "- 仅对确认为并联同类设备的变量做聚合，聚合组由精确变量名列表定义，不依赖正则或文字匹配。",
+        "- 不设占位列：没有源数据的概念直接忽略。",
         "",
         "## 输入输出",
         "",
         f"- 输入 parquet：`{input_parquet}`",
         f"- 输出 parquet：`{output_parquet}`",
         f"- 输出 shape：**{reduced_df.shape}**",
-        f"- 变量动作统计：`{action_counts}`",
+        f"- 代表变量总数：470",
+        f"- 参与聚合的变量数：{n_agg_vars}（合并为 {n_agg_groups} 个概念特征）",
+        f"- 直通保留的变量数：{n_keep}",
         "",
-        "## 用户要求必须保留的流程概念",
+        "## 关于旋流器开关状态",
         "",
-        "| 概念列 | 中文名 | 源变量数 | 当前可用数 |",
-        "|---|---|---:|---:|",
+        "经穷举检索（2026-04），当前 `modeling_dataset_final.parquet` 中不存在任何旋流器开关状态列。",
+        "ABC 元数据中 204 个 `_ZT` 变量均为浮选药剂阀/鼓风机阀/分配器阀，无旋流器开关。",
+        "若实际 DCS 存在该信号，需从未接入当前数据集的子系统补充数据后重新处理。",
+        "",
+        "## 聚合概念表",
+        "",
+        f"共 **{n_agg_groups}** 个聚合概念，{n_agg_vars} 个代表变量参与聚合。",
+        "",
+        "| 特征名 | 中文名 | 工艺段 | 角色 | 方法 | 源变量数 | 可用数 |",
+        "|---|---|---|---|---|---:|---:|",
     ]
-
-    required_df = concept_df[concept_df["required"] == "yes"]
-    for _, row in required_df.iterrows():
-        lines.append(f"| `{row['feature_name']}` | {row['feature_cn']} | {row['source_var_count']} | {row['available_var_count']} |")
-
-    lines.extend(
-        [
-            "",
-            "## 聚合概念表",
-            "",
-            "| 特征名 | 中文名 | 工艺段 | 角色 | 方法 | 源变量数 | 可用数 |",
-            "|---|---|---|---|---|---:|---:|",
-        ]
-    )
     for _, row in concept_df.iterrows():
         lines.append(
             f"| `{row['feature_name']}` | {row['feature_cn']} | {row['process']} | {row['role']} | "
             f"{row['method']} | {row['source_var_count']} | {row['available_var_count']} |"
         )
 
-    if expert_doc_excerpt:
-        lines.extend(["", "## 专家知识摘要", "", expert_doc_excerpt, ""])
-
-    lines.extend(
-        [
-            "",
-            "## 逐变量分析",
-            "",
-            "| 变量名 | 中文描述 | 动作 | 聚合目标 | 工艺段 | 角色 | 说明 |",
-            "|---|---|---|---|---|---|---|",
-        ]
-    )
-    for _, row in analysis_df.iterrows():
+    lines.extend([
+        "",
+        "## 逐变量处置明细",
+        "",
+        "| 变量名 | 中文描述 | 动作 | 输出特征 | 理由 |",
+        "|---|---|---|---|---|",
+    ])
+    for _, row in analysis_df.sort_values("Variable_Name").iterrows():
         reason = str(row["Reason"]).replace("|", "｜").replace("\n", " ")
         desc = str(row["Description_CN"]).replace("|", "｜")
         lines.append(
             f"| `{row['Variable_Name']}` | {desc} | {row['Action']} | "
-            f"`{row['Aggregate_Target']}` | {row['Process']} | {row['Role']} | {reason} |"
+            f"`{row['Output_Feature']}` | {reason} |"
         )
 
     return "\n".join(lines) + "\n"
@@ -649,65 +501,97 @@ def main() -> None:
     variables_csv = Path(args.variables_csv)
     abc_csv = Path(args.abc_csv)
     input_parquet = Path(args.input_parquet)
-    output_parquet = Path(args.output_parquet) if args.output_parquet else input_parquet.with_name(
-        f"{input_parquet.stem}_expert_reduced.parquet"
+    output_parquet = (
+        Path(args.output_parquet)
+        if args.output_parquet
+        else input_parquet.with_name(f"{input_parquet.stem}_expert_reduced.parquet")
     )
     analysis_csv = Path(args.analysis_csv)
     report_md = Path(args.report_md)
     concept_csv = Path(args.concept_csv)
-    expert_doc = Path(args.expert_doc)
 
-    if not variables_csv.exists():
-        raise FileNotFoundError(f"找不到变量清单：{variables_csv}")
-    if not abc_csv.exists():
-        raise FileNotFoundError(f"找不到 ABC 元数据：{abc_csv}")
-    if not input_parquet.exists():
-        raise FileNotFoundError(f"找不到输入 parquet：{input_parquet}")
+    for p in [variables_csv, abc_csv, input_parquet]:
+        if not p.exists():
+            raise FileNotFoundError(f"找不到文件：{p}")
 
     variables_df = pd.read_csv(variables_csv, encoding="utf-8-sig")
     abc_df = pd.read_csv(abc_csv, encoding="utf-8-sig")
     df = pd.read_parquet(input_parquet)
-    parquet_cols = set(df.columns)
 
-    _, comment_to_names, _ = build_comment_maps(abc_df)
-    concepts = build_concepts(parquet_cols, comment_to_names)
-    extra_vars = {var for concept in concepts for var in concept.source_vars}
-    metadata_df = build_metadata(variables_df, abc_df, extra_vars)
-    analysis_df, concept_df = build_analysis(metadata_df, concepts, parquet_cols)
+    name_to_comment, name_to_group = build_comment_maps(abc_df)
 
-    reduced = pd.DataFrame(index=df.index)
-    for concept in concepts:
-        available_vars = [v for v in concept.source_vars if v in df.columns]
-        reduced[concept.feature_name] = aggregate_series(df, available_vars, concept.method)
+    # 建立 470 个代表变量的元数据字典
+    rep_vars: list[str] = []
+    rep_var_meta: dict[str, dict[str, str]] = {}
+    for _, row in variables_df.iterrows():
+        name = normalize_text(row.get("Non_Collinear_Representative", ""))
+        if not name:
+            continue
+        rep_vars.append(name)
+        rep_var_meta[name] = {
+            "Description_CN": normalize_text(row.get("Description_CN", "")) or name_to_comment.get(name, ""),
+            "Group_ABC": normalize_text(row.get("Group", "")) or name_to_group.get(name, ""),
+            "Operability": normalize_text(row.get("Operability", "")),
+            "process": "",
+        }
 
-    y_cols = [c for c in df.columns if c.lower().startswith("y_")]
-    for col in y_cols:
-        reduced[col] = df[col]
+    # 定义聚合组（精确变量名，无字符匹配）
+    agg_groups = define_parallel_groups()
 
-    expert_excerpt = ""
-    if expert_doc.exists():
-        text = expert_doc.read_text(encoding="utf-8", errors="replace").strip()
-        expert_excerpt = text[:1200] + ("..." if len(text) > 1200 else "")
+    # 检查聚合组中每个变量是否在代表变量集中
+    rep_set = set(rep_vars)
+    for grp in agg_groups:
+        for v in grp.source_vars:
+            if v not in rep_set:
+                raise ValueError(
+                    f"聚合组 {grp.feature_name} 中的变量 {v} 不在代表变量集（non_collinear_representative_vars_operability.csv）中。"
+                    "请核实变量名后重新运行。"
+                )
 
-    analysis_csv.parent.mkdir(parents=True, exist_ok=True)
-    report_md.parent.mkdir(parents=True, exist_ok=True)
-    concept_csv.parent.mkdir(parents=True, exist_ok=True)
-    output_parquet.parent.mkdir(parents=True, exist_ok=True)
+    # 确定哪些变量参与聚合
+    vars_in_agg: set[str] = {v for grp in agg_groups for v in grp.source_vars}
+
+    # 构建输出 DataFrame（用 pd.concat 避免逐列插入的碎片化 PerformanceWarning）
+    parts: list[pd.DataFrame] = []
+
+    # 1. 直通保留：未参与聚合的代表变量，原样保留
+    passthrough_cols = [v for v in rep_vars if v not in vars_in_agg]
+    # 区分在 parquet 中存在的 vs 缺失的
+    existing = [v for v in passthrough_cols if v in df.columns]
+    missing  = [v for v in passthrough_cols if v not in df.columns]
+    if existing:
+        parts.append(df[existing])
+    if missing:
+        parts.append(pd.DataFrame(np.nan, index=df.index, columns=missing))
+
+    # 2. 聚合：并联设备组 → 概念特征
+    agg_series: dict[str, pd.Series] = {}
+    for grp in agg_groups:
+        available_vars = [v for v in grp.source_vars if v in df.columns]
+        agg_series[grp.feature_name] = aggregate_series(df, available_vars, grp.method)
+    if agg_series:
+        parts.append(pd.DataFrame(agg_series, index=df.index))
+
+    # 3. 保留 y_ 标签列
+    y_cols = [col for col in df.columns if col.lower().startswith("y_")]
+    if y_cols:
+        parts.append(df[y_cols])
+
+    reduced = pd.concat(parts, axis=1)
+
+    # 生成分析和报告
+    analysis_df = build_analysis_df(rep_vars, agg_groups, rep_var_meta)
+    concept_df = build_concept_df(agg_groups, df)
+    report_text = render_report(analysis_df, concept_df, input_parquet, output_parquet, reduced)
+
+    # 写出文件
+    for p in [analysis_csv.parent, report_md.parent, concept_csv.parent, output_parquet.parent]:
+        p.mkdir(parents=True, exist_ok=True)
 
     analysis_df.to_csv(analysis_csv, index=False, encoding="utf-8-sig")
     concept_df.to_csv(concept_csv, index=False, encoding="utf-8-sig")
     reduced.to_parquet(output_parquet)
-    report_md.write_text(
-        render_report(
-            analysis_df=analysis_df,
-            concept_df=concept_df,
-            input_parquet=input_parquet,
-            output_parquet=output_parquet,
-            reduced_df=reduced,
-            expert_doc_excerpt=expert_excerpt,
-        ),
-        encoding="utf-8-sig",
-    )
+    report_md.write_text(report_text, encoding="utf-8-sig")
 
     print(f"analysis_csv={analysis_csv}")
     print(f"concept_csv={concept_csv}")
