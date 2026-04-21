@@ -323,7 +323,9 @@ def main() -> None:
     expert_excerpt = ""
     if expert_doc.exists():
         text = expert_doc.read_text(encoding="utf-8", errors="replace")
-        expert_excerpt = "  ".join(text.split()[:140])
+        expert_excerpt = text[:1000].strip()
+        if len(text) > 1000:
+            expert_excerpt += "..."
 
     analysis_csv.parent.mkdir(parents=True, exist_ok=True)
     report_md.parent.mkdir(parents=True, exist_ok=True)
