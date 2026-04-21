@@ -1407,9 +1407,25 @@ def main():
     print(f" 交叉拟合策略: {_fmt_cf_cfg(cf_cfg)}")
     print("=" * 70)
 
-    df, operable_in_df, observable_in_df = build_xin2_data(
+    df_raw, operable_in_df_raw, observable_in_df_raw = build_xin2_data(
         operability_csv=args.operability_csv,
     )
+
+    # ── 窗口聚合对齐（将每行 Y 测量时间点作为锚点，汇聚 X/D 统计量）──
+    from build_aligned_dataset import build_aligned_dataset
+    operable_cols_raw   = sorted(operable_in_df_raw   & set(df_raw.columns))
+    observable_cols_raw = sorted(observable_in_df_raw & set(df_raw.columns))
+    df, new_operable, new_observable = build_aligned_dataset(
+        df_raw,
+        operable_cols  = operable_cols_raw,
+        observable_cols= observable_cols_raw,
+        window_minutes = 30,
+        y_ffill_limit  = 2,
+    )
+    # update sets after alignment
+    operable_in_df   = set(new_operable)
+    observable_in_df = set(new_observable)
+
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
         print(f"[调参模式] 截取最近 {args.sample_size} 条数据（共 {len(df)} 条）")
