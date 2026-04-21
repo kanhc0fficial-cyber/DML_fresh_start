@@ -1,510 +1,730 @@
-﻿# 专家知识驱动的变量降维分析报告
+﻿# 专家知识驱动的聚合优先降维报告
 
-- 专家文档：`/home/runner/work/DML_fresh_start/DML_fresh_start/东鞍山烧结厂选矿专家知识.txt`
+## 本版策略
+
+- 本版以**聚合**为主，而不是以删除为主。
+- 每个变量都被逐一映射为：`keep_single` / `aggregate` / `drop`。
+- 用户明确要求保留的流程概念，即使当前数据源缺失，也保留为输出 schema 占位列。
+
+## 输入输出
+
 - 输入 parquet：`/home/runner/work/DML_fresh_start/DML_fresh_start/data/modeling_dataset_final.parquet`
 - 输出 parquet：`/home/runner/work/DML_fresh_start/DML_fresh_start/data/modeling_dataset_final_expert_reduced.parquet`
-- 降维模式：`all`
-- 原始变量数：**470**
-- 保留变量数：**136**
-- 删除变量数：**334**
+- 输出 shape：**(1953, 44)**
+- 变量动作统计：`{'aggregate': 331, 'drop': 283, 'keep_single': 5}`
 
-## 专家知识抽取要点
+## 用户要求必须保留的流程概念
 
-- 原矿品位、磁性铁、亚铁、碳酸铁是前馈边界条件，应优先保留。
-- 磁选区的核心控制变量是励磁电压/电流、尾矿阀门、给矿/冲矿压力与液位；纯电气健康量可降维。
-- 塔磨/旋流器回路重点保留给矿流量、补水阀位、泵池液位、泵频/压力；轴承/减速机健康量可降维。
-- 浮选区重点保留分矿给矿量、药剂泵/阀、pH、矿浆浓度、气量、泡沫层厚度、关键泵池液位。
-- 报警、配电室频率/功率因数、泛化相电流、缺少语义的空描述变量优先删除。
-
-### 专家文档片段
-
-东鞍山烧结厂选矿工艺全流程拓扑与大模型控制底层物理架构报告矿石物理化学特性与全流程拓扑总纲东鞍山烧结厂处理的入选矿石属典型的高硅、贫铁、低钙镁及低硫磷的酸性难选贫赤铁矿石。全厂选矿工艺流程历经多次重大技术升级，目前已全面确立了“三段一闭路破碎—两段连续磨矿—弱磁-强磁-扫强磁抛尾—塔磨细磨分级—阴离子反浮选—精矿压滤与水净化闭路循环”的宏大物理化学拓扑网络 。该复杂网络不仅定义了矿物解离与相界面分离的机械路径，更为部署全流程智能大模型（Large AI Model）提供了具有严格因果时序关系的观测空间与控制节点 。矿石的基础物相分析表明，原矿全铁含量在29.10%至33.70%之间波动，平均品位约为31.49% 。其铁物相主要由磁性铁和赤褐铁矿构成，其中磁性铁平均含量约为13.60%（金属分布率43.19%），赤褐铁矿平均含量约为12.79%（金属分布率40.62%） 。值得大模型系统高度警惕的是，矿石中含有显著的碳酸铁（含量约1.50%至2.10%）与硅酸铁（含量约1.90%至3.20%） 。这部分弱磁性且易泥化的脉石或共生矿物，在后续的强磁与浮选作业中会引发极大的系统扰动，是诱发尾矿品位异常升高的核心干扰源，也是大模型前馈控制（Feedforward Control）策略必须重点观测的边界条件 。破碎筛分作业的串并联拓扑网络与大模型动作空间破碎筛分系统承担着将采场大块原矿降维至适合球磨机处理粒度（-12mm含量占90%以上）的核心任务。该系统呈现出多层级异构设备并联与局部闭路串联的复杂网络特征，物料的质量流与能量流在此发生剧烈转换。粗碎与中碎系统拓扑采场原矿首先给入东鞍山铁矿新建的粗破作业。粗破机采用1台B1200型旋回破碎机（串联单节点），配备480kW电机，排矿口尺寸设为125mm，设计台时能力为1000至1400吨/小时 。在流程考查中，该粗破机实际台时能力达到1323.23吨/小时，排矿产品中-75mm粒级含量高达75.20%，P80（80%物料通过的筛孔尺寸）为94.74mm，表现出极佳的粗碎效率 。粗破排矿通过胶带运输机串联给入3座新建的圆筒储矿仓。储矿仓不仅提供物理缓冲，更是大模型进行生产节拍解耦的重要容积节点 。仓下皮带将矿石串联给入中破作业。中破作业由2台H8800-MC标准型圆锥破碎机并联构成（常态为一用一备），电机功率600kW，排矿口设定...
-
-## 分阶段保留统计
-
-| Stage | 名称 | 保留数 | 删除数 |
+| 概念列 | 中文名 | 源变量数 | 当前可用数 |
 |---|---|---:|---:|
-| 0 | 公共动力/上游边界 | 0 | 17 |
-| 1 | 药剂合成 | 1 | 9 |
-| 2 | 磁选分离 | 31 | 88 |
-| 3 | 塔磨分级 | 18 | 40 |
-| 4 | 浓缩缓冲 | 2 | 6 |
-| 5 | 调浆激发 | 12 | 19 |
-| 6 | 浮选网络 | 61 | 78 |
-| 7 | 尾矿收尾 | 5 | 7 |
-| 8 | 精矿脱水 | 3 | 3 |
+| `raw_ore_grade` | 原矿品位 | 1 | 0 |
+| `raw_ore_magnetic_iron` | 原矿磁性铁 | 1 | 0 |
+| `raw_ore_ferrous_iron` | 原矿亚铁 | 1 | 0 |
+| `raw_ore_siderite` | 原矿碳酸铁 | 1 | 0 |
+| `agg_crushing_belt_status` | 破碎_皮带启停 | 0 | 0 |
+| `agg_crushing_belt_frequency` | 破碎_皮带频率 | 0 | 0 |
+| `agg_crushing_level_height` | 破碎_料位高度 | 0 | 0 |
+| `agg_crushing_feed_rate` | 破碎_给矿量 | 0 | 0 |
+| `agg_crushing_cumulative_amount` | 破碎_累积量 | 0 | 0 |
+| `agg_grinding_cyclone_pressure` | 球磨_旋流器压力 | 0 | 0 |
+| `agg_grinding_sand_add_water` | 球磨_沉沙补加水 | 0 | 0 |
+| `agg_grinding_cyclone_pool_level` | 球磨_旋流器泵池液位 | 0 | 0 |
+| `agg_grinding_cyclone_pump_frequency` | 球磨_旋流器泵频 | 0 | 0 |
+| `agg_grinding_ball_mill_feed_rate` | 球磨_球磨给矿量 | 0 | 0 |
+| `agg_grinding_pendulum_state` | 球磨_摆式状态 | 0 | 0 |
+| `agg_magnetic_excitation_voltage` | 磁选_励磁电压 | 19 | 19 |
+| `agg_magnetic_excitation_current` | 磁选_励磁电流 | 19 | 19 |
+| `agg_magnetic_level` | 磁选_液位 | 16 | 16 |
+| `agg_magnetic_coil_temperature` | 磁选_线圈温度 | 15 | 15 |
+| `agg_magnetic_motor_current_proxy` | 磁选_电机电流代理 | 12 | 12 |
+| `agg_tower_pump_pool_makeup_water` | 塔磨_泵池补加水量 | 1 | 1 |
+| `agg_tower_pump_pool_level` | 塔磨_泵池液位 | 3 | 3 |
+| `agg_tower_cyclone_feed_pump_frequency` | 塔磨_旋流器泵池泵频 | 12 | 12 |
+| `agg_tower_cyclone_add_water` | 塔磨_旋流器补加水量 | 6 | 6 |
+| `agg_tower_cyclone_switch_state` | 塔磨_旋流器开关状态 | 0 | 0 |
+| `agg_flotation_feed_rate` | 浮选_给矿量 | 5 | 5 |
+| `agg_flotation_reagent_cao_dose` | 浮选_CaO加药量代理 | 6 | 6 |
+| `agg_flotation_reagent_naoh_dose` | 浮选_NaOH加药量代理 | 3 | 3 |
+| `agg_flotation_reagent_tdii_dose` | 浮选_TDII加药量代理 | 16 | 16 |
+| `agg_flotation_reagent_k6_dose` | 浮选_K6-1加药量代理 | 4 | 4 |
+| `agg_flotation_froth_thickness` | 浮选_泡沫厚度 | 13 | 13 |
+| `agg_flotation_ph` | 浮选_PH值 | 7 | 7 |
+| `agg_flotation_airflow_actual` | 浮选_充气量实际值 | 32 | 32 |
+| `agg_flotation_valve_opening` | 浮选_阀门开度 | 19 | 19 |
+| `agg_flotation_tailings_froth_image` | 浮选_尾矿泡沫图像 | 0 | 0 |
+
+## 聚合概念表
+
+| 特征名 | 中文名 | 工艺段 | 角色 | 方法 | 源变量数 | 可用数 |
+|---|---|---|---|---|---:|---:|
+| `raw_ore_grade` | 原矿品位 | 边界条件 | 原矿品位 | first | 1 | 0 |
+| `raw_ore_magnetic_iron` | 原矿磁性铁 | 边界条件 | 磁性铁 | first | 1 | 0 |
+| `raw_ore_ferrous_iron` | 原矿亚铁 | 边界条件 | 亚铁 | first | 1 | 0 |
+| `raw_ore_siderite` | 原矿碳酸铁 | 边界条件 | 碳酸铁 | first | 1 | 0 |
+| `agg_crushing_belt_status` | 破碎_皮带启停 | 破碎 | 皮带启停 | mean | 0 | 0 |
+| `agg_crushing_belt_frequency` | 破碎_皮带频率 | 破碎 | 皮带频率 | mean | 0 | 0 |
+| `agg_crushing_level_height` | 破碎_料位高度 | 破碎 | 料位高度 | mean | 0 | 0 |
+| `agg_crushing_feed_rate` | 破碎_给矿量 | 破碎 | 给矿量 | mean | 0 | 0 |
+| `agg_crushing_cumulative_amount` | 破碎_累积量 | 破碎 | 累积量 | mean | 0 | 0 |
+| `agg_grinding_cyclone_pressure` | 球磨_旋流器压力 | 球磨 | 旋流器压力 | mean | 0 | 0 |
+| `agg_grinding_sand_add_water` | 球磨_沉沙补加水 | 球磨 | 沉沙补加水 | mean | 0 | 0 |
+| `agg_grinding_cyclone_pool_level` | 球磨_旋流器泵池液位 | 球磨 | 旋流器泵池液位 | mean | 0 | 0 |
+| `agg_grinding_cyclone_pump_frequency` | 球磨_旋流器泵频 | 球磨 | 旋流器泵频 | mean | 0 | 0 |
+| `agg_grinding_ball_mill_feed_rate` | 球磨_球磨给矿量 | 球磨 | 球磨给矿量 | mean | 0 | 0 |
+| `agg_grinding_pendulum_state` | 球磨_摆式状态 | 球磨 | 摆式状态 | mean | 0 | 0 |
+| `agg_magnetic_excitation_voltage` | 磁选_励磁电压 | 磁选 | 励磁电压 | mean | 19 | 19 |
+| `agg_magnetic_excitation_current` | 磁选_励磁电流 | 磁选 | 励磁电流 | mean | 19 | 19 |
+| `agg_magnetic_level` | 磁选_液位 | 磁选 | 液位 | mean | 16 | 16 |
+| `agg_magnetic_coil_temperature` | 磁选_线圈温度 | 磁选 | 线圈温度 | mean | 15 | 15 |
+| `agg_magnetic_motor_current_proxy` | 磁选_电机电流代理 | 磁选 | 电机电流 | mean | 12 | 12 |
+| `agg_magnetic_tailings_valve_opening` | 磁选_尾矿阀门开度 | 磁选 | 尾矿阀门 | mean | 39 | 39 |
+| `agg_magnetic_flush_water_pressure` | 磁选_冲矿水压力 | 磁选 | 冲矿水压力 | mean | 37 | 37 |
+| `agg_magnetic_blowdown_valve_opening` | 磁选_排污阀门开度 | 磁选 | 排污阀门 | mean | 11 | 11 |
+| `agg_tower_pump_pool_makeup_water` | 塔磨_泵池补加水量 | 塔磨 | 泵池补加水量 | mean | 1 | 1 |
+| `agg_tower_pump_pool_level` | 塔磨_泵池液位 | 塔磨 | 泵池液位 | mean | 3 | 3 |
+| `agg_tower_cyclone_feed_pump_frequency` | 塔磨_旋流器泵池泵频 | 塔磨 | 旋流器泵池泵频 | mean | 12 | 12 |
+| `agg_tower_cyclone_overflow_pump_frequency` | 塔磨_旋流器溢流泵频 | 塔磨 | 旋流器溢流泵频 | mean | 11 | 11 |
+| `agg_tower_cyclone_add_water` | 塔磨_旋流器补加水量 | 塔磨 | 旋流器补加水量 | mean | 6 | 6 |
+| `agg_tower_cyclone_switch_state` | 塔磨_旋流器开关状态 | 塔磨 | 旋流器开关状态 | any | 0 | 0 |
+| `agg_tower_motor_current` | 塔磨_主电机电流 | 塔磨 | 主电机电流 | mean | 6 | 6 |
+| `agg_flotation_feed_rate` | 浮选_给矿量 | 浮选 | 给矿量 | sum | 5 | 5 |
+| `agg_flotation_reagent_cao_dose` | 浮选_CaO加药量代理 | 浮选 | CaO加药量 | mean | 6 | 6 |
+| `agg_flotation_reagent_naoh_dose` | 浮选_NaOH加药量代理 | 浮选 | NaOH加药量 | mean | 3 | 3 |
+| `agg_flotation_reagent_tdii_dose` | 浮选_TDII加药量代理 | 浮选 | TD-II加药量 | mean | 16 | 16 |
+| `agg_flotation_reagent_k6_dose` | 浮选_K6-1加药量代理 | 浮选 | K6-1加药量 | mean | 4 | 4 |
+| `agg_flotation_froth_thickness` | 浮选_泡沫厚度 | 浮选 | 泡沫厚度 | mean | 13 | 13 |
+| `agg_flotation_ph` | 浮选_PH值 | 浮选 | PH值 | mean | 7 | 7 |
+| `agg_flotation_airflow_actual` | 浮选_充气量实际值 | 浮选 | 充气量 | mean | 32 | 32 |
+| `agg_flotation_airflow_setpoint` | 浮选_充气量设定值 | 浮选 | 充气量设定 | mean | 12 | 12 |
+| `agg_flotation_valve_opening` | 浮选_阀门开度 | 浮选 | 阀门开度 | mean | 19 | 19 |
+| `agg_flotation_tailings_pool_level` | 浮选_尾矿相关泵池液位 | 浮选 | 尾矿泵池液位 | mean | 8 | 8 |
+| `agg_flotation_tailings_froth_image` | 浮选_尾矿泡沫图像 | 浮选 | 尾矿泡沫图像 | mean | 0 | 0 |
+
+## 专家知识摘要
+
+东鞍山烧结厂选矿工艺全流程拓扑与大模型控制底层物理架构报告矿石物理化学特性与全流程拓扑总纲东鞍山烧结厂处理的入选矿石属典型的高硅、贫铁、低钙镁及低硫磷的酸性难选贫赤铁矿石。全厂选矿工艺流程历经多次重大技术升级，目前已全面确立了“三段一闭路破碎—两段连续磨矿—弱磁-强磁-扫强磁抛尾—塔磨细磨分级—阴离子反浮选—精矿压滤与水净化闭路循环”的宏大物理化学拓扑网络 。该复杂网络不仅定义了矿物解离与相界面分离的机械路径，更为部署全流程智能大模型（Large AI Model）提供了具有严格因果时序关系的观测空间与控制节点 。矿石的基础物相分析表明，原矿全铁含量在29.10%至33.70%之间波动，平均品位约为31.49% 。其铁物相主要由磁性铁和赤褐铁矿构成，其中磁性铁平均含量约为13.60%（金属分布率43.19%），赤褐铁矿平均含量约为12.79%（金属分布率40.62%） 。值得大模型系统高度警惕的是，矿石中含有显著的碳酸铁（含量约1.50%至2.10%）与硅酸铁（含量约1.90%至3.20%） 。这部分弱磁性且易泥化的脉石或共生矿物，在后续的强磁与浮选作业中会引发极大的系统扰动，是诱发尾矿品位异常升高的核心干扰源，也是大模型前馈控制（Feedforward Control）策略必须重点观测的边界条件 。破碎筛分作业的串并联拓扑网络与大模型动作空间破碎筛分系统承担着将采场大块原矿降维至适合球磨机处理粒度（-12mm含量占90%以上）的核心任务。该系统呈现出多层级异构设备并联与局部闭路串联的复杂网络特征，物料的质量流与能量流在此发生剧烈转换。粗碎与中碎系统拓扑采场原矿首先给入东鞍山铁矿新建的粗破作业。粗破机采用1台B1200型旋回破碎机（串联单节点），配备480kW电机，排矿口尺寸设为125mm，设计台时能力为1000至1400吨/小时 。在流程考查中，该粗破机实际台时能力达到1323.23吨/小时，排矿产品中-75mm粒级含量高达75.20%，P80（80%物料通过的筛孔尺寸）为94.74mm，表现出极佳的粗碎效率 。粗破排矿通过胶带运输机串联给入3座新建的圆筒储矿仓。储矿仓不仅提供物理缓冲，更是大模型进行生产节拍解耦的重要容积节点 。仓下皮带将矿石串联给入中破作业。中破作业由2台H8800-MC标准型圆锥破碎机并联构成（常态为一用一备），电机功率600kW，排矿口设定在30至60mm之间 。中破实际运行台时能力为1300.98吨/小时，其排矿产品P80降至81.00mm 。然而，考查数据显示中破排矿中仍有5.29%的+100mm超大粒级物料，最大块度达120mm，这部分物料将不可避免地对后续细破设备形成瞬态冲击载荷 。筛分与细碎闭路循环拓扑中破排矿与细破排矿在输送皮带上物理汇合后，统一串联给入筛分作业。筛分系统由6台2DZSYA2760型双轴双层圆振动筛并联构...
+
 
 ## 逐变量分析
 
-| 变量名 | Group | Stage | 信号类型 | 结论 | 说明 |
-|---|---|---|---|---|---|
-| `FX_LT_611` | C | 1 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_PET101_AI` | A | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_PET201_AI` | A | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_PET202_AI` | B | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC501_WKF2_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC502_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC502_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC504_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC505_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC505_XKYW_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC506_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC506_WKF2_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC507_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC507_XKYW_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC508_CKSYL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC508_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC508_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC508_XKYW_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC510_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC510_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC606_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC606_WKF1_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC606_WKF2_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC607_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC607_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC607_WKF2_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC608_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC609_CKSCKYL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC609_LCDL_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC609_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC610_LCDY_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC2_QC610_XKYW_AI` | C | 2 | magnetic_core_state | keep | 专家知识将其列为磁选区核心控制/状态量。 |
-| `MC1_FET102_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET202_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET302_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET402_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET502_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET503_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET601_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FET602_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FV101_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC1_FV201_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_FV201_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC1_FV301_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC1_FV501_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC1_GKB709_HZ` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_LET101_AI` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC1_LV101_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC1_LV301_AO` | C | 3 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `MC2_YLB811_HZ` | C | 3 | grinding_classification_state | keep | 专家知识将其列为塔磨/旋流器主回路变量。 |
-| `MC2_NSJ_LPYL_AI` | C | 4 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_NSJ_TPYL_AI` | C | 4 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_FT_1702` | A | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_HGB2204_I` | A | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2401_I` | A | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2403_I` | A | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_TV_1103_AO` | A | 5 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_AT_2104` | B | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_FT_2701` | B | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_FT_2702` | B | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2302_I` | B | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_TV_2101_AO` | B | 5 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_HGB2201_F` | C | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_HGB2203_I` | C | 5 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_HGB2204_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2303_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2404_F_W` | A | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_LGB2701_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LT_1603` | A | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X1CX1_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX2_AI1` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX2_AI5` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX2_AI6` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX2_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX3_AI1` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX3_AI3` | A | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X1CX3_AI5` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX3_AI6` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1CX3_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1JX_AI1` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1JX_AI15` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1JX_AI3` | A | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X1JX_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX1_AI11` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX1_AI13` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX1_AI5` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX2_AI3` | A | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X1SX2_AI5` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX2_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX3_AI12` | A | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_X1SX3_AI4` | A | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_X1SX3_AI5` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X1SX3_AI9` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1101_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1101_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1104_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1201_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1201_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1202_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1303_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1303_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1304_F` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_ZJB1304_I` | A | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_DT_2602` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_FT_2601` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_FT_2602` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2502_F` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LGB2602_F` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_LT_2603` | B | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X2CX1_AI1` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2CX1_AI12` | B | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_X2CX1_AI9` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2CX2_AI12` | B | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_X2CX2_AI3` | B | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X2CX2_AI9` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2CX3_AI5` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2CX3_AI9` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2JX_AI1` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2JX_AI11` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2JX_AI13` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2JX_AI3` | B | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X2JX_AI9` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2SX1_AI1` | B | 6 | flotation_core_state | keep | 专家知识将其列为浮选回路关键状态/加药/气量变量。 |
-| `FX_X2SX1_AI3` | B | 6 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_X2SX2_AI4` | B | 6 | direct_control | keep | 该变量属于可下发的控制指令或设定值，必须保留。 |
-| `FX_LT_1604` | A | 7 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_1606` | A | 7 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_2604` | B | 7 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_LET_1101_AI` | C | 7 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_LET_1103_AI` | C | 7 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_1605` | A | 8 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_2605` | B | 8 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_FET202_DL_AI` | B | 8 | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `MC2_FET201_DL_AI` | A | ? | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_2602` | B | ? | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_LT_1701` | C | ? | process_state | keep | 该变量直接表征矿浆流态、药剂环境或分选状态，建议保留。 |
-| `FX_GFJ901_I` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_GFJ902_F` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_GFJ903_I` | C | 0 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_GFJ904_I` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_GFJ905_I` | C | 0 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_GFJ906_F` | C | 0 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_AH10_AI5` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_AH12_AI5` | C | 0 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC1_AH12_AI7` | C | 0 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC1_AH6_AI6` | C | 0 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC1_AH8_AI5` | C | 0 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC1_AH9_AI4` | C | 0 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC2_RC101_DL_AI` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_RC101_DY_AI` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_RC102_DL_AI` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_RC102_DY_AI` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_RC106_DY_AI` | C | 0 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC1901_I` | A | 1 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_HV_631_AI` | C | 1 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_JBC1902_I` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC1903_I` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC303_I` | C | 1 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_LT_621B` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_621C` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_621D` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_641A` | C | 1 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_JYB2_DL_AI` | C | 2 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `MC2_QC501_LCDL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_LCDY_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC501_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_XKYW_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC501_ZHPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC502_CKSRKYL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC502_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC502_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC502_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC502_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC503_LCDL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC503_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC503_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC503_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC503_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC504_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC504_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC504_XKYW_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC504_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC505_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC505_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC506_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC506_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_LCDY_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_PWF_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC507_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC508_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC508_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC508_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC508_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC509_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC509_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC509_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC510_CKSYL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC510_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC510_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC510_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC510_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC510_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_LCDL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_LCDY_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_XKYW_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC601_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC602_LCDY_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC602_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC602_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC602_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC603_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC603_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC604_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC604_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC606_MDPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC606_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC606_XKYW_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC606_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC607_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC607_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC607_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC607_XQWD_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC607_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC608_LCDY_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC608_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC608_PWF_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC608_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC608_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC609_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC609_PWF_AI` | C | 2 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `MC2_QC609_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC609_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC609_XKYW_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC609_XQWD_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC609_ZHPL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC610_CKSYL_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC610_MDPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_QC610_PWF_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC610_WKF1_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC610_WKF2_AI` | C | 2 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_QC610_ZHPL_AI` | C | 2 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_FET101_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_FET301_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_FV101_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_FV401_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_FV401_AO` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_GKB702_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB703_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB704_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB706_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB707_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB708_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB710_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB711_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC1_GKB711_HZ` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_LET301_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_LET501_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM201_JSJ_CYK_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM201_JSJ_YC_WD_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM201_ZDJ_DL_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM202_ZDJ_DL_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM204_HDZC_1_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM204_JSJ_CYK_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM204_JSJ_YC_WD_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM204_ZDJ_DL_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM204_ZDJ_DZ_A_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM205_JSJ_CYK_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM205_ZDJ_DL_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM206_HDZC_2_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM206_JSJ_CYK_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC1_TM206_ZDJ_DL_AI` | C | 3 | equipment_health | drop | 塔磨设备健康量可作为运维信号，但对工艺降维优先级较低。 |
-| `MC1_TM206_ZDJ_DZ_B_WD_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_LET_102_AI` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_YLB802_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_YLB805_DL` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_YLB806_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_YLB809_DL` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_ZJB01_DL` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_ZJB02_AO` | C | 3 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_ZJB03_AO` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_ZJB04_DL` | C | 3 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_P1_N2_I` | C | 4 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_P2_N1_I` | C | 4 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_P3_N2_I` | C | 4 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_PT_901_CK` | C | 4 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_PT_902_CK` | C | 4 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_CQC_GNJNJ_AI` | C | 4 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC103_I` | A | 5 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_TV_1104_AI` | A | 5 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_JBC203_I` | B | 5 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_TT_2105` | B | 5 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_TV_2102_AI` | B | 5 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_AT_1102` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_1701` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HGB2202_I` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HV_632_AI` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC102_I` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2302_F` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2403_F_W` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2602_I` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2702_F` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2801_F` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2801_I` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_1101_AI` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_2103_AI` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_2104_AI` | C | 5 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_AH5_AI6` | A | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_AH6_AI6` | A | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_FXJ803_I` | A | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_X1SX1_AI7` | A | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X1SX3_AI7` | A | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_FT_2602_BJ` | B | 6 | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_X2CX1_AI7` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X2CX2_AI27` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X2CX3_AI11` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X2CX3_AI13` | B | 6 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_X2CX3_AI7` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X2JX_AI17` | B | 6 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_X2SX1_AI38` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_X2SX1_AI7` | B | 6 | actuator_feedback_duplicate | drop | 阀位反馈多为执行器回显，可由设定/流量/液位间接表征，优先降维。 |
-| `FX_AH10_AI6` | C | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_AH12_AI6` | C | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_AH14_AI7` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_AH16_AI5` | C | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_AH16_AI6` | C | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_AH7_AI6` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_AH9_AI6` | C | 6 | power_supply_health | drop | 配电/供电健康量与主工艺因果链距离较远，优先删除。 |
-| `FX_FXJ401_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ401_U` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ402_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ407_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ410_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ504_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ601_I` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_FXJ602_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ603_I` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_FXJ604_I` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_FXJ605_I` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_FXJ701_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FXJ801_I` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_FXJ802_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LGB2303_F_W` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1CX1_AI1` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1CX1_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1CX2_AI12` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1CX2_AI3` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1CX2_AI7` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1JX_AI11` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1JX_AI13` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1JX_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX1_AI15` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX1_AI16` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX1_AI3` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX2_AI12` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX2_AI7` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X1SX3_AI1` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX1_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX2_AI4` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX2_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX2_AI7` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX3_AI27` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2CX3_AI3` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2JX_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX1_AI13` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX1_AI4` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX1_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX2_AI3` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX3_AI3` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX3_AI4` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_X2SX3_AI5` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1104_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1203_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1204_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1204_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1301_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1302_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB13_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1401_F` | C | 6 | support_equipment_load | drop | 设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。 |
-| `FX_ZJB1404_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB14_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1502_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1601_F` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1601_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1603_I` | C | 6 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_1604_BJ` | A | 7 | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_ZJB1502_I` | C | 7 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_ZJB1504_F` | C | 7 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_ZJB1504_I` | C | 7 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1602_I` | C | 7 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_ZJB1604_I` | C | 7 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_SGB1002_DL` | C | 7 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_ZJB1401_I` | C | 8 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1402_I` | C | 8 | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB1404_I` | C | 8 | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_LT_1601_BJ` | A | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_TT_1101` | A | ? | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_1FP2_ZT` | C | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_3QF05_ZT` | C | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_3QF11_ZT` | C | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_8F16_ZT` | C | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_FT_1601` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_1602` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612C` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612D` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612E` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612F` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612G` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_612H` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622A` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622A_LJ` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622B` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622C` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622D` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622E` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622E_SP` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622F` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622G` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_622H` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_642A` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_642B` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_642C` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_FT_642D` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HV_621A_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HV_621B_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HV_621C_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_HV_621D_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_JBC1801_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_1601` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_1601_HSV` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_1602` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_LT_1602_BJ` | C | ? | alarm_or_status | drop | 报警/状态信号不直接表征工艺机理，优先删除。 |
-| `FX_TT_1105` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_2102` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_2104` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_2106` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_621B2` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_621C1` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_631B` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_901_JK` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TT_902_JK` | C | ? | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `FX_TT_906_JK` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_611_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_621A_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_621B_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_621C_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_TV_621D_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB3002_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB3004_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB33_F` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB33_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB34_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB41_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB43_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `FX_ZJB62_I` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_FET102_DL_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_LET_302_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_LET_502_AI` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_SGB1002_HZ` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
-| `MC2_SGB1003_DL` | C | ? | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_SGB1003_HZ` | C | ? | weak_aux_signal | drop | 辅助信号与核心工艺链路关系较弱，建议删除。 |
-| `MC2_WKB903_DL` | C | ? | unidentified_signal | drop | 缺少中文描述且无法从命名稳定识别工艺语义，保守删除。 |
+| 变量名 | 中文描述 | 动作 | 聚合目标 | 工艺段 | 角色 | 说明 |
+|---|---|---|---|---|---|---|
+| `CXXY_CXN` |  | keep_single | `raw_ore_magnetic_iron` | 边界条件 | 磁性铁 | 专家知识明确要求保留原矿磁性铁。 |
+| `CXXY_PW` |  | keep_single | `raw_ore_grade` | 边界条件 | 原矿品位 | 专家知识明确要求保留原矿品位。 |
+| `CXXY_TSN` |  | keep_single | `raw_ore_siderite` | 边界条件 | 碳酸铁 | 专家知识明确要求保留原矿碳酸铁。 |
+| `CXXY_YT` |  | keep_single | `raw_ore_ferrous_iron` | 边界条件 | 亚铁 | 专家知识明确要求保留原矿亚铁。 |
+| `FX_1FP2_ZT` | 电动阀(分配器)1#1FP2状态 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_3QF05_ZT` | 5#阀状态 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_3QF11_ZT` | 11#阀状态 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_8F16_ZT` | 电动阀(输送二次K6-1粗选)8F16状态 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH10_AI6` | 浮选3#低压室2#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH12_AI6` | 浮选4#鼓风机变频总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH14_AI7` | 浮选5#鼓风机变频总瞬时无功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH16_AI5` | 浮选6#鼓风机变频总功率因素 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH16_AI6` | 浮选6#鼓风机变频总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH5_AI6` | 浮选1#低压室1#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH6_AI6` | 浮选1#低压室2#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH7_AI6` | 浮选2#低压室1#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AH9_AI6` | 浮选3#低压室1#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_AT_1101` | 一系列3#-1高效搅拌槽给矿管PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_1102` | 一系列3#-1高效搅拌槽PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_1103` | 一系列3#-2高效搅拌槽给矿管PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_1104` | 一系列3#-2高效搅拌槽PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_2102` | 二系列3#-3高效搅拌槽PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_2103` | 二系列3#-4高效搅拌槽给矿管PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_AT_2104` | 二系列3#-4高效搅拌槽PH值 | aggregate | `agg_flotation_ph` | 浮选 | PH值 | pH 是浮选药剂体系核心变量，按各测点均值聚合。 |
+| `FX_DT_2602` | 粗选给矿泵1104出口管道浓度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_1601` | 一系列粗选给矿泵1101出口管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_1602` | 一系列粗选给矿泵1102出口管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_1701` | 一系列1#-1高效高效搅拌槽入矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_1702` | 一系列1#-2高效高效搅拌槽入矿管道流量 | aggregate | `agg_flotation_feed_rate` | 浮选 | 给矿量 | 用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。 |
+| `FX_FT_2601` | 二系列粗选给矿泵1101出口管道流量 | aggregate | `agg_flotation_feed_rate` | 浮选 | 给矿量 | 用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。 |
+| `FX_FT_2602` | 二系列粗选给矿泵1102出口管道流量 | aggregate | `agg_flotation_feed_rate` | 浮选 | 给矿量 | 用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。 |
+| `FX_FT_2602_BJ` | 二系列粗选给矿泵1102出口管道流量报警 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_2701` | 二系列1#-3高效高效搅拌槽入矿管道流量 | aggregate | `agg_flotation_feed_rate` | 浮选 | 给矿量 | 用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。 |
+| `FX_FT_2702` | 二系列1#-4高效高效搅拌槽入矿管道流量 | aggregate | `agg_flotation_feed_rate` | 浮选 | 给矿量 | 用户要求保留浮选给矿量，按各支路流量求和形成总给矿概念特征。 |
+| `FX_FT_612C` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_612D` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_612E` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_612F` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_612G` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_612H` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622A` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622A_LJ` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622B` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622C` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622D` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622E` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622E_SP` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622F` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622G` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_622H` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_642A` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_642B` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_642C` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FT_642D` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ401_I` | 浮选机(粗选)401电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ401_U` | 浮选机(粗选)401电压 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ402_I` | 浮选机(粗选)402电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ407_I` | 浮选机(粗选)407电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ410_I` | 浮选机(粗选)410电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ504_I` | 浮选机(精选)504电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ601_I` | 浮选机(扫选一)601电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ602_I` | 浮选机(扫选一)602电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ603_I` | 浮选机(扫选一)603电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ604_I` | 浮选机(扫选一)604电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ605_I` | 浮选机(扫选一)605电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ701_I` | 浮选机(扫选二)701电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ801_I` | 浮选机(扫选三)801电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ802_I` | 浮选机(扫选三)802电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_FXJ803_I` | 浮选机(扫选三)803电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ901_I` | 离心鼓风机901电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ902_F` | 离心鼓风机902频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ903_I` | 离心鼓风机903电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ904_I` | 离心鼓风机904电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ905_I` | 离心鼓风机905电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_GFJ906_F` | 离心鼓风机906频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HGB2201_F` | 化工泵(输送一次CaO)2201频率反馈 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2201_F_W` | 化工泵(输送一次CaO)2201频率给定 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2202_F` | 化工泵(输送一次CaO)2202频率反馈 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2202_I` | 化工泵(输送一次CaO)2202电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HGB2203_F` | 化工泵(输送一次CaO)2203频率反馈 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2203_I` | 化工泵(输送一次CaO)2203电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HGB2204_F` | 化工泵(输送一次CaO)2204频率反馈 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2204_F_W` | 化工泵(输送一次CaO)2204频率给定 | aggregate | `agg_flotation_reagent_cao_dose` | 浮选 | CaO加药量 | CaO 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_HGB2204_I` | 化工泵(输送一次CaO)2204电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_621A_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_621B_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_621C_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_621D_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_631_AI` | 热水桶加蒸汽电动调节蝶阀HV-631阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_HV_632_AI` | 二次TD-Ⅱ搅拌槽加入热水主管道电动调节球阀HV-632阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC102_I` | 1#高效搅拌槽102电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC103_I` | 1#高效搅拌槽103电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC1801_I` | 搅拌槽(一次CaO)1801电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC1901_I` | 搅拌槽(二次CaO)1901电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC1902_I` | 搅拌槽(二次CaO)1902电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC1903_I` | 搅拌槽(二次CaO)1903电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC203_I` | 2#高效搅拌槽203电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_JBC303_I` | 3#高效搅拌槽303电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2301_F` | 螺杆泵(输送二次TD-II粗选)2301频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2301_F_W` | 螺杆泵(输送二次TD-II粗选)2301频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2302_F` | 螺杆泵(输送二次TD-II粗选)2302频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2302_F_W` | 螺杆泵(输送二次TD-II粗选)2302频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2302_I` | 螺杆泵(输送二次TD-II粗选)2302电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2303_F` | 螺杆泵(输送二次TD-II粗选)2303频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2303_F_W` | 螺杆泵(输送二次TD-II粗选)2303频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2303_I` | 螺杆泵(输送二次TD-II粗选)2303电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2304_F` | 螺杆泵(输送二次TD-II粗选)2304频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2304_F_W` | 螺杆泵(输送二次TD-II粗选)2304频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2401_F` | 螺杆泵(输送二次TD-II精选)2401频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2401_F_W` | 螺杆泵(输送二次TD-II精选)2401频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2401_I` | 螺杆泵(输送二次TD-II精选)2401电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2402_F` | 螺杆泵(输送二次TD-II精选)2402频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2402_F_W` | 螺杆泵(输送二次TD-II精选)2402频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2403_F` | 螺杆泵(输送二次TD-II精选)2403频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2403_F_W` | 螺杆泵(输送二次TD-II精选)2403频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2403_I` | 螺杆泵(输送二次TD-II精选)2403电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2404_F` | 螺杆泵(输送二次TD-II精选)2404频率反馈 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2404_F_W` | 螺杆泵(输送二次TD-II精选)2404频率给定 | aggregate | `agg_flotation_reagent_tdii_dose` | 浮选 | TD-II加药量 | TD-II 是关键捕收剂，多个粗选/精选支路按泵频和设定做概念层聚合。 |
+| `FX_LGB2502_F` | 螺杆泵(输送二次K6-1粗选)2502频率反馈 | aggregate | `agg_flotation_reagent_k6_dose` | 浮选 | K6-1加药量 | K6-1 为关键抑制剂支路，按泵频和设定做概念层聚合。 |
+| `FX_LGB2502_F_W` | 螺杆泵(输送二次K6-1粗选)2502频率给定 | aggregate | `agg_flotation_reagent_k6_dose` | 浮选 | K6-1加药量 | K6-1 为关键抑制剂支路，按泵频和设定做概念层聚合。 |
+| `FX_LGB2602_F` | 螺杆泵(输送二次K6-1一扫)2602频率反馈 | aggregate | `agg_flotation_reagent_k6_dose` | 浮选 | K6-1加药量 | K6-1 为关键抑制剂支路，按泵频和设定做概念层聚合。 |
+| `FX_LGB2602_F_W` | 螺杆泵(输送二次K6-1一扫)2602频率给定 | aggregate | `agg_flotation_reagent_k6_dose` | 浮选 | K6-1加药量 | K6-1 为关键抑制剂支路，按泵频和设定做概念层聚合。 |
+| `FX_LGB2602_I` | 螺杆泵(输送二次K6-1一扫)2602电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2701_F` | 螺杆泵(输送二次NaOH)2701频率反馈 | aggregate | `agg_flotation_reagent_naoh_dose` | 浮选 | NaOH加药量 | NaOH 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_LGB2702_F` | 螺杆泵(输送二次NaOH)2702频率反馈 | aggregate | `agg_flotation_reagent_naoh_dose` | 浮选 | NaOH加药量 | NaOH 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_LGB2702_F_W` | 螺杆泵(输送二次NaOH)2702频率给定 | aggregate | `agg_flotation_reagent_naoh_dose` | 浮选 | NaOH加药量 | NaOH 当前可直接观测的是泵频/设定，按专家知识将其聚合为加药量代理特征。 |
+| `FX_LGB2801_F` | 螺杆泵((皂化泵TD-II粗选))2801频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LGB2801_I` | 螺杆泵((皂化泵TD-II粗选))2801电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1601` | 一系列精选泡沫及一扫底流泵池(给粗选)液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1601_BJ` | 一系列精选泡沫及一扫底流泵池(给粗选)液位报警 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1601_HSV` | 一系列粗选给矿泵池液位液位控制上限 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1602` | 一系列粗选泡沫及二扫底流泵池(给一扫)液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1602_BJ` | 一系列粗选泡沫及二扫底流泵池(给一扫)液位报警 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1603` | 一系列三扫底流泵池(给二扫)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_1604` | 一系列尾矿泵池(给尾矿浓缩机)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_1604_BJ` | 一系列尾矿泵池(给尾矿浓缩机)液位报警 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1605` | 一系列精矿泵(给精矿浓缩机)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_1606` | 一系列事故池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_1701` | 浮选溢流泵池液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_2602` | 二系列粗选泡沫及二扫底流泵池(给一扫)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_2603` | 二系列三扫底流泵池(给二扫)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_2604` | 二系列尾矿泵池(给尾矿浓缩机)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_2605` | 二系列精矿泵(给精矿浓缩机)液位 | aggregate | `agg_flotation_tailings_pool_level` | 浮选 | 尾矿泵池液位 | 尾矿/中矿/溢流泵池液位反映浮选网络缓冲状态，作为辅助聚合特征保留。 |
+| `FX_LT_611` | 二次K6-1贮药箱(贮罐)液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_621B` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_621C` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_621D` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_LT_641A` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_P1_N2_I` | 4#Φ30m浮选前浓缩机N2电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_P2_N1_I` | 6#Φ30m浮选前浓缩机N1电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_P3_N2_I` | 4#Φ53m浮选前浓缩机N2电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_PT_901_CK` | 离心鼓风机901出口压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_PT_902_CK` | 离心鼓风机902出口压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_1101` | 一系列1#-1高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_1105` | 一系列3#-1高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_2102` | 二系列2#-3高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_2104` | 二系列2#-4高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_2105` | 二系列3#-3高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_2106` | 二系列3#-4高效搅拌槽温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_621B2` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_621C1` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_631B` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_901_JK` | 离心鼓风机901进口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_902_JK` | 离心鼓风机902进口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TT_906_JK` | 离心鼓风机906进口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_1101_AI` | 一系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-1101阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_1103_AO` | 一系列1#-2高效搅拌槽加蒸汽电动调节蝶阀TV-1103阀位给定信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_1104_AI` | 一系列2#-2高效搅拌槽加蒸汽电动调节蝶阀TV-1104阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_2101_AO` | 二系列1#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2101阀位给定信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_2102_AI` | 二系列2#-1高效搅拌槽加蒸汽电动调节蝶阀TV-2102阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_2103_AI` | 二系列1#-2高效搅拌槽加蒸汽电动调节蝶阀TV-2103阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_2104_AI` | 二系列2#-2高效搅拌槽加蒸汽电动调节蝶阀TV-2104阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_611_AI` | 二次K6-1贮药箱(贮罐)加蒸汽电动调节蝶阀TV-611阀位反馈信号 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_621A_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_621B_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_621C_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_TV_621D_AI` |  | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1CX1_AI1` | Ⅰ系列粗选1作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1CX1_AI5` | Ⅰ系列粗选1作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1CX1_AI6` | Ⅰ系列粗选1作业气量1设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1CX1_AI9` | Ⅰ系列粗选1作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1CX2_AI1` | Ⅰ系列粗选2作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1CX2_AI12` | Ⅰ系列粗选2作业蝶阀2开度设定值显示 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1CX2_AI3` | Ⅰ系列粗选2作业液位阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1CX2_AI5` | Ⅰ系列粗选2作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1CX2_AI6` | Ⅰ系列粗选2作业气量1设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1CX2_AI7` | Ⅰ系列粗选2作业蝶阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1CX2_AI9` | Ⅰ系列粗选2作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1CX3_AI1` | Ⅰ系列粗选3作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1CX3_AI3` | Ⅰ系列粗选3作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1CX3_AI5` | Ⅰ系列粗选3作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1CX3_AI6` | Ⅰ系列粗选3作业气量1设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1CX3_AI9` | Ⅰ系列粗选3作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1JX_AI1` | Ⅰ系列精选作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1JX_AI11` | Ⅰ系列精选作业气量2设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1JX_AI13` | Ⅰ系列精选作业气量3实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1JX_AI15` | Ⅰ系列精选作业气量3设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1JX_AI3` | Ⅰ系列精选作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1JX_AI5` | Ⅰ系列精选作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1JX_AI9` | Ⅰ系列精选作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX1_AI11` | Ⅰ系列扫选1作业气量2设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1SX1_AI13` | Ⅰ系列扫选1作业气量3实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX1_AI15` | Ⅰ系列扫选1作业气量3设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1SX1_AI16` | Ⅰ系列扫选1作业蝶阀3开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1SX1_AI3` | Ⅰ系列扫选1作业液位阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1SX1_AI5` | Ⅰ系列扫选1作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX1_AI7` | Ⅰ系列扫选1作业蝶阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1SX1_AI9` | Ⅰ系列扫选1作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX2_AI1` | Ⅰ系列扫选2作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1SX2_AI12` | Ⅰ系列扫选2作业蝶阀2开度设定值显示 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1SX2_AI3` | Ⅰ系列扫选2作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1SX2_AI5` | Ⅰ系列扫选2作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX2_AI7` | Ⅰ系列扫选2作业蝶阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X1SX2_AI9` | Ⅰ系列扫选2作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX3_AI1` | Ⅰ系列扫选3作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X1SX3_AI12` | Ⅰ系列扫选3作业蝶阀2开度设定值显示 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1SX3_AI4` | Ⅰ系列扫选3作业液位阀1开度设定显示 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1SX3_AI5` | Ⅰ系列扫选3作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X1SX3_AI6` | Ⅰ系列扫选3作业气量1设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X1SX3_AI7` | Ⅰ系列扫选3作业蝶阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X1SX3_AI9` | Ⅰ系列扫选3作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX1_AI1` | Ⅱ系列粗选1作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2CX1_AI12` | Ⅱ系列粗选1作业蝶阀2开度设定值显示 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX1_AI5` | Ⅱ系列粗选1作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX1_AI7` | Ⅱ系列粗选1作业蝶阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX1_AI9` | Ⅱ系列粗选1作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX2_AI1` | Ⅱ系列粗选2作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2CX2_AI12` | Ⅱ系列粗选2作业蝶阀2开度设定值显示 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX2_AI27` | Ⅱ系列粗选2作业电动阀开度 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX2_AI3` | Ⅱ系列粗选2作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX2_AI4` | Ⅱ系列粗选2作业液位阀1开度设定显示 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2CX2_AI5` | Ⅱ系列粗选2作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX2_AI7` | Ⅱ系列粗选2作业蝶阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2CX2_AI9` | Ⅱ系列粗选2作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX3_AI1` | Ⅱ系列粗选3作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2CX3_AI11` | Ⅱ系列粗选3作业蝶阀2开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX3_AI13` | Ⅱ系列粗选3作业1#减速机低速端上轴温 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2CX3_AI27` | Ⅱ系列粗选3作业电动阀开度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2CX3_AI3` | Ⅱ系列粗选3作业液位阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2CX3_AI5` | Ⅱ系列粗选3作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2CX3_AI7` | Ⅱ系列粗选3作业蝶阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2CX3_AI9` | Ⅱ系列粗选3作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2JX_AI1` | Ⅱ系列精选作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2JX_AI11` | Ⅱ系列精选作业气量2设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X2JX_AI13` | Ⅱ系列精选作业气量3实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2JX_AI15` | Ⅱ系列精选作业气量3设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X2JX_AI17` | Ⅱ系列精选作业1#减速机低速端上轴温 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2JX_AI3` | Ⅱ系列精选作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2JX_AI5` | Ⅱ系列精选作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2JX_AI9` | Ⅱ系列精选作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX1_AI1` | Ⅱ系列扫选1作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2SX1_AI11` | Ⅱ系列扫选1作业气量2设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X2SX1_AI13` | Ⅱ系列扫选1作业气量3实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX1_AI15` | Ⅱ系列扫选1作业气量3设定值显示 | aggregate | `agg_flotation_airflow_setpoint` | 浮选 | 充气量设定 | 设定值单列保留，以区分执行结果与控制意图。 |
+| `FX_X2SX1_AI3` | Ⅱ系列扫选1作业液位阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2SX1_AI38` | Ⅱ系列扫选1作业电动阀开度 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2SX1_AI4` | Ⅱ系列扫选1作业液位阀1开度设定显示 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2SX1_AI5` | Ⅱ系列扫选1作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX1_AI7` | Ⅱ系列扫选1作业蝶阀1开度实际值 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2SX1_AI9` | Ⅱ系列扫选1作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX2_AI1` | Ⅱ系列扫选2作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2SX2_AI3` | Ⅱ系列扫选2作业液位阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2SX2_AI4` | Ⅱ系列扫选2作业液位阀1开度设定显示 | aggregate | `agg_flotation_valve_opening` | 浮选 | 阀门开度 | 用户要求保留浮选阀门开度，按可观测阀门开度/设定聚合。 |
+| `FX_X2SX2_AI5` | Ⅱ系列扫选2作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX2_AI9` | Ⅱ系列扫选2作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX3_AI1` | Ⅱ系列扫选3作业泡沫层厚度实际值 | aggregate | `agg_flotation_froth_thickness` | 浮选 | 泡沫厚度 | 多个粗选/精选/扫选槽的泡沫厚度共同表征浮选泡沫态，按并联槽体聚合。 |
+| `FX_X2SX3_AI3` | Ⅱ系列扫选3作业液位阀1开度实际值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2SX3_AI4` | Ⅱ系列扫选3作业液位阀1开度设定显示 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_X2SX3_AI5` | Ⅱ系列扫选3作业气量1实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_X2SX3_AI9` | Ⅱ系列扫选3作业气量2实际值 | aggregate | `agg_flotation_airflow_actual` | 浮选 | 充气量 | 浮选充气量是用户要求的必保概念，按所有可观测实际气量点聚合。 |
+| `FX_ZJB1101_F` | 渣浆泵(粗选给矿泵)1101频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1101_I` | 渣浆泵(粗选给矿泵)1101电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1104_F` | 渣浆泵(粗选给矿泵)1104频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1104_I` | 渣浆泵(粗选给矿泵)1104电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1201_F` | 渣浆泵(一扫给矿泵)1201频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1201_I` | 渣浆泵(一扫给矿泵)1201电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1202_I` | 渣浆泵(一扫给矿泵)1202电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1203_I` | 渣浆泵(一扫给矿泵)1203电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1204_F` | 渣浆泵(一扫给矿泵)1204频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1204_I` | 渣浆泵(一扫给矿泵)1204电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1301_I` | 渣浆泵(二扫给矿泵)1301电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1302_I` | 渣浆泵(二扫给矿泵)1302电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1303_F` | 渣浆泵(二扫给矿泵)1303频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1303_I` | 渣浆泵(二扫给矿泵)1303电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1304_F` | 渣浆泵(二扫给矿泵)1304频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1304_I` | 渣浆泵(二扫给矿泵)1304电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB13_F` | 渣浆泵13频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1401_F` | 渣浆泵(精矿泵)1401频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1401_I` | 渣浆泵(精矿泵)1401电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1402_I` | 渣浆泵(精矿泵)1402电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1404_F` | 渣浆泵(精矿泵)1404频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1404_I` | 渣浆泵(精矿泵)1404电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB14_I` | 渣浆泵14电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1502_F` | 渣浆泵(事故泵)1502频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1502_I` | 渣浆泵(事故泵)1502电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1504_F` | 渣浆泵(事故泵)1504频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1504_I` | 渣浆泵(事故泵)1504电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1601_F` | 渣浆泵(尾矿泵)1601频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1601_I` | 渣浆泵(尾矿泵)1601电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1602_I` | 渣浆泵(尾矿泵)1602电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1603_I` | 渣浆泵(尾矿泵)1603电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB1604_I` | 渣浆泵(尾矿泵)1604电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB3002_I` | 渣浆泵(溢流泵)3002电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB3004_I` | 渣浆泵(溢流泵)3004电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB33_F` | 渣浆泵33频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB33_I` | 渣浆泵33电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB34_I` | 渣浆泵34电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB41_I` | 渣浆泵41电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB43_I` | 渣浆泵43电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `FX_ZJB62_I` | 渣浆泵62电流反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH10_AI5` | 磨磁1#配电室2#变压器总功率因素 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH12_AI5` | 磨磁6#塔磨机总功率因素 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH12_AI7` | 磨磁6#塔磨机总瞬时无功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH6_AI6` | 磨磁3#配电室2#变压器总瞬时有功功率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH8_AI5` | 磨磁2#配电室2#变压器总功率因素 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_AH9_AI4` | 磨磁3#配电室1#变压器电网频率 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET101_AI` | 1#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET102_AI` | 1#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET201_AI` | 2#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET202_AI` | 2#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET301_AI` | 3#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET302_AI` | 3#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET401_AI` | 4#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET402_AI` | 4#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET501_AI` | 5#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET502_AI` | 5#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FET503_AI` | 3#三次分级旋流器给矿泵池加水管道流量 | keep_single | `agg_tower_pump_pool_makeup_water` | 塔磨 | 泵池补加水量 | 当前数据中仅发现明确的泵池加水流量变量，按用户要求直接保留。 |
+| `MC1_FET601_AI` | 6#三次分级旋流器沉砂加水管道流量 | aggregate | `agg_tower_cyclone_add_water` | 塔磨 | 旋流器补加水量 | 旋流器沉砂加水流量为用户指定必须保留项，按并联支路聚合。 |
+| `MC1_FET602_AI` | 6#三次分级旋流器给矿管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV101_AI` | 1#三次分级旋流器沉砂加水管道阀位反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV101_AO` | 1#三次分级旋流器沉砂加水管道阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV201_AI` | 2#三次分级旋流器沉砂加水管道阀位反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV201_AO` | 2#三次分级旋流器沉砂加水管道阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV301_AO` | 3#三次分级旋流器沉砂加水管道阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV401_AI` | 4#三次分级旋流器沉砂加水管道阀位反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV401_AO` | 4#三次分级旋流器沉砂加水管道阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_FV501_AO` | 5#三次分级旋流器沉砂加水管道阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB701_HZ` | 1#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB702_DL` | 2#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB702_HZ` | 2#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB703_DL` | 3#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB703_HZ` | 3#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB704_DL` | 4#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB704_HZ` | 4#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB705_HZ` | 5#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB706_DL` | 6#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB706_HZ` | 6#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB707_DL` | 7#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB707_HZ` | 7#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB708_DL` | 8#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB708_HZ` | 8#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB709_HZ` | 9#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB710_DL` | 10#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB710_HZ` | 10#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB711_DL` | 11#三旋给矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_GKB711_HZ` | 11#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_GKB712_HZ` | 12#三旋给矿泵频率反馈 | aggregate | `agg_tower_cyclone_feed_pump_frequency` | 塔磨 | 旋流器泵池泵频 | 塔磨区多个旋流器给矿泵频率属于同一控制层，按专家知识做均值聚合。 |
+| `MC1_LET101_AI` | 1#三次分级旋流器给矿泵池液位 | aggregate | `agg_tower_pump_pool_level` | 塔磨 | 泵池液位 | 多个给矿泵池液位属于并行塔磨回路，按概念聚合。 |
+| `MC1_LET301_AI` | 2#三次分级旋流器给矿泵池液位 | aggregate | `agg_tower_pump_pool_level` | 塔磨 | 泵池液位 | 多个给矿泵池液位属于并行塔磨回路，按概念聚合。 |
+| `MC1_LET501_AI` | 3#三次分级旋流器给矿泵池液位 | aggregate | `agg_tower_pump_pool_level` | 塔磨 | 泵池液位 | 多个给矿泵池液位属于并行塔磨回路，按概念聚合。 |
+| `MC1_LV101_AO` | 1#三次分级旋流器给矿泵池加水阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_LV301_AO` | 2#三次分级旋流器给矿泵池加水阀位给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM201_JSJ_CYK_WD_AI` | 减速机出油口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM201_JSJ_YC_WD_AI` | 减速机油池温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM201_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM202_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM203_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM204_HDZC_1_WD_AI` | 滑动轴承1#温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM204_JSJ_CYK_WD_AI` | 减速机出油口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM204_JSJ_YC_WD_AI` | 减速机油池温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM204_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM204_ZDJ_DZ_A_WD_AI` | 主电机定子A温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM205_JSJ_CYK_WD_AI` | 减速机出油口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM205_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM206_HDZC_2_WD_AI` | 滑动轴承2#温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM206_JSJ_CYK_WD_AI` | 减速机出油口温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC1_TM206_ZDJ_DL_AI` | 主电机电流 | aggregate | `agg_tower_motor_current` | 塔磨 | 主电机电流 | 塔磨主电机电流能反映载荷水平，作为辅助聚合特征保留。 |
+| `MC1_TM206_ZDJ_DZ_B_WD_AI` | 主电机定子B温度 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_CQC_GNJNJ_AI` | 挂泥电机扭矩 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_FET102_DL_AI` | 2#新建强磁前浓缩机底流泵出口管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_FET201_DL_AI` | 1#新建机械加速澄清池底流泵出口管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_FET202_DL_AI` | 2#新建机械加速澄清池底流泵出口管道流量 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_JYB2_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_LET_102_AI` | 1#三次分级旋流器溢流泵池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_LET_1101_AI` | 1#事故池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_LET_1103_AI` | 3#事故池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_LET_302_AI` | 2#三次分级旋流器溢流泵池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_LET_502_AI` | 3#三次分级旋流器溢流泵池液位 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_NSJ_LPYL_AI` | 落耙压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_NSJ_TPYL_AI` | 提耙压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_PET101_AI` | 1#新建强磁前浓缩机底流泵出口管道压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_PET201_AI` | 1#机械澄清池底流泵出口管道压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_PET202_AI` | 2#机械澄清池底流泵出口管道压力 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC501_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC501_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC501_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC501_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC501_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC501_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC501_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC501_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC501_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC501_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC501_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC501_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC502_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC502_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC502_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC502_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC502_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC502_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC502_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC502_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC502_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC502_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC502_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC503_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC503_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC503_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC503_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC503_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC503_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC503_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC503_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC503_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC503_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC503_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC504_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC504_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC504_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC504_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC504_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC504_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC504_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC504_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC504_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC504_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC505_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC505_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC505_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC505_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC505_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC505_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC505_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC505_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC506_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC506_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC506_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC506_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC506_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC506_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC506_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC507_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC507_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC507_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC507_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC507_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC507_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC507_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC507_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC507_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC508_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC508_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC508_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC508_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC508_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC508_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC508_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC508_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC508_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC508_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC509_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC509_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC509_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC509_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC509_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC509_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC509_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC509_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC509_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC509_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC510_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC510_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC510_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC510_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC510_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC510_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC510_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC510_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC510_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC510_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC601_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC601_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC601_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC601_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC601_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC601_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC601_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC601_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC601_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC602_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC602_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC602_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC602_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC602_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC602_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC602_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC602_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC603_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC603_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC603_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC603_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC603_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC603_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC603_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC603_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC603_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC604_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC604_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC604_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC604_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC604_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC604_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC604_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC604_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC604_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC604_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC605_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC605_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC605_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC605_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC605_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC605_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC605_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC606_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC606_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC606_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC606_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC606_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC606_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC606_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC606_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC606_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC607_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC607_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC607_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC607_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC607_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC607_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC607_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC607_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC608_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC608_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC608_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC608_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC608_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC608_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC608_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC608_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC609_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC609_CKSRKYL_AI` | 冲矿水入口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC609_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC609_LCDL_AI` | 励磁电流值 | aggregate | `agg_magnetic_excitation_current` | 磁选 | 励磁电流 | 多个强磁机的励磁电流属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC609_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC609_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC609_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC609_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC609_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC609_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC609_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC609_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC610_CKSCKYL_AI` | 冲矿水出口压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC610_CKSYL_AI` | 冲矿水压力值 | aggregate | `agg_magnetic_flush_water_pressure` | 磁选 | 冲矿水压力 | 冲矿水压力是磁选区重要流体边界条件，按专家知识保留为辅助聚合特征。 |
+| `MC2_QC610_LCDY_AI` | 励磁电压值 | aggregate | `agg_magnetic_excitation_voltage` | 磁选 | 励磁电压 | 多个强磁机的励磁电压属于并联设备同类控制量，按专家知识做概念层聚合。 |
+| `MC2_QC610_MDPL_AI` | 脉动电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_QC610_PWF_AI` | 排污阀门开度实际值 | aggregate | `agg_magnetic_blowdown_valve_opening` | 磁选 | 排污阀门 | 排污阀门开度反映磁选回路排尾状态，作为辅助聚合特征保留。 |
+| `MC2_QC610_WKF1_AI` | 1#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC610_WKF2_AI` | 2#尾矿阀门实际开度反馈值 | aggregate | `agg_magnetic_tailings_valve_opening` | 磁选 | 尾矿阀门 | 专家知识明确要求保留尾矿阀门调节信息，按并联磁选机统一聚合。 |
+| `MC2_QC610_XKYW_AI` | 选矿液位 | aggregate | `agg_magnetic_level` | 磁选 | 液位 | 液位虽存在不准问题，但用户明确要求保留，因此按并联槽体做均值聚合。 |
+| `MC2_QC610_XQWD_AI` | 线圈温度值 | aggregate | `agg_magnetic_coil_temperature` | 磁选 | 线圈温度 | 用户要求保留线圈温度，按并联设备聚合为单一过程温度特征。 |
+| `MC2_QC610_ZHPL_AI` | 转环电机实际工作频率显示值 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_RC101_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC101_DY_AI` | BC线电压 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_RC102_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC102_DY_AI` | BC线电压 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_RC103_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC104_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC105_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC106_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC106_DY_AI` | BC线电压 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_RC107_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC109_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC110_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC111_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_RC112_DL_AI` | A相电流 | aggregate | `agg_magnetic_motor_current_proxy` | 磁选 | 电机电流 | 当前数据中未找到明确命名为磁选电机电流的单列，使用现场已存在的相关 A 相电流信号做代理聚合。 |
+| `MC2_SGB1002_DL` | 2#事故泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_SGB1002_HZ` | 2#事故泵频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_SGB1003_DL` | 3#事故泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_SGB1003_HZ` | 3#事故泵频率反馈 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_WKB903_DL` | 3#尾矿泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_YLB802_DL` | 2#旋流器溢流泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_YLB802_HZ` | 2#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB803_HZ` | 3#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB804_HZ` | 4#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB805_DL` | 5#旋流器溢流泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_YLB805_HZ` | 5#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB806_DL` | 6#旋流器溢流泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_YLB806_HZ` | 6#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB807_HZ` | 7#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB808_HZ` | 8#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB809_DL` | 9#旋流器溢流泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_YLB809_HZ` | 9#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB810_HZ` | 10#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB811_HZ` | 11#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_YLB812_HZ` | 12#旋流器溢流泵频率反馈 | aggregate | `agg_tower_cyclone_overflow_pump_frequency` | 塔磨 | 旋流器溢流泵频 | 溢流泵频率用于补强塔磨旋流器回路泵频表征。 |
+| `MC2_ZJB01_DL` | 底流泵站1#渣浆泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_ZJB02_AO` | 底流泵站2#渣浆泵频率给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_ZJB03_AO` | 底流泵站3#渣浆泵频率给定 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |
+| `MC2_ZJB04_DL` | 底流泵站4#渣浆泵电流 | drop | `` |  |  | 未进入专家定义的核心概念聚合层，且当前版本以概念级聚合为主。 |

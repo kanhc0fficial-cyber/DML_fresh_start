@@ -16,8 +16,8 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
+import numpy as np
 import pandas as pd
 
 
@@ -102,7 +102,7 @@ def build_comment_maps(abc_df: pd.DataFrame) -> tuple[dict[str, str], dict[str, 
 
 def aggregate_series(df: pd.DataFrame, vars_in_df: list[str], method: str) -> pd.Series:
     if not vars_in_df:
-        return pd.Series(pd.NA, index=df.index, dtype="float64")
+        return pd.Series(np.nan, index=df.index, dtype="float64")
 
     sub = df[vars_in_df].apply(pd.to_numeric, errors="coerce")
     if method == "first":
@@ -480,7 +480,7 @@ def build_concepts(
 def build_metadata(
     variables_df: pd.DataFrame,
     abc_df: pd.DataFrame,
-    parquet_cols: set[str],
+    extra_vars: set[str],
 ) -> pd.DataFrame:
     name_to_comment, _, name_to_group = build_comment_maps(abc_df)
     var_map: dict[str, dict[str, str]] = {}
@@ -495,9 +495,7 @@ def build_metadata(
             "Source": "representative_csv",
         }
 
-    for name in parquet_cols:
-        if name.startswith("y_"):
-            continue
+    for name in extra_vars:
         if name not in var_map:
             var_map[name] = {
                 "Description_CN": name_to_comment.get(name, ""),
@@ -673,7 +671,8 @@ def main() -> None:
 
     _, comment_to_names, _ = build_comment_maps(abc_df)
     concepts = build_concepts(parquet_cols, comment_to_names)
-    metadata_df = build_metadata(variables_df, abc_df, parquet_cols)
+    extra_vars = {var for concept in concepts for var in concept.source_vars}
+    metadata_df = build_metadata(variables_df, abc_df, extra_vars)
     analysis_df, concept_df = build_analysis(metadata_df, concepts, parquet_cols)
 
     reduced = pd.DataFrame(index=df.index)
