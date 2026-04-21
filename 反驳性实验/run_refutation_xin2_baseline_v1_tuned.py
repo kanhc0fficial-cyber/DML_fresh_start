@@ -87,8 +87,8 @@ X_PARQUET             = os.path.join(DATA_DIR, "X_features_final.parquet")
 Y_PARQUET             = os.path.join(DATA_DIR, "y_target_final.parquet")
 
 DEFAULT_OPERABILITY_CSV = os.path.join(
-    REPO_ROOT, "数据预处理",
-    "数据与处理结果-分阶段-去共线性后",
+    REPO_ROOT, "data",
+    "操作变量和混杂变量",
     "non_collinear_representative_vars_operability.csv",
 )
 
@@ -961,9 +961,25 @@ def main():
           f"成功率≥{MIN_BOOTSTRAP_SUCCESS_RATE:.0%}, safe_x≤{SAFE_X_MAX_COUNT or '∞'}")
     print("=" * 70)
 
-    df, operable_in_df, observable_in_df = build_xin2_data(
+    df_raw, operable_in_df_raw, observable_in_df_raw = build_xin2_data(
         operability_csv=args.operability_csv,
     )
+
+    # ── 窗口聚合对齐（将每行 Y 测量时间点作为锚点，汇聚 X/D 统计量）──
+    from build_aligned_dataset import build_aligned_dataset
+    operable_cols_raw   = sorted(operable_in_df_raw   & set(df_raw.columns))
+    observable_cols_raw = sorted(observable_in_df_raw & set(df_raw.columns))
+    df, new_operable, new_observable = build_aligned_dataset(
+        df_raw,
+        operable_cols  = operable_cols_raw,
+        observable_cols= observable_cols_raw,
+        window_minutes = 30,
+        y_ffill_limit  = 2,
+    )
+    # update sets after alignment
+    operable_in_df   = set(new_operable)
+    observable_in_df = set(new_observable)
+
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
         print(f"[调参模式] 截取最近 {args.sample_size} 条数据（共 {len(df)} 条）")
