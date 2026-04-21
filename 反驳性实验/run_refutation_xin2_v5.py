@@ -143,16 +143,16 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ═══════════════════════════════════════════════════════════════════
 #  超参（继承 v4 全部 + v5 新增）
 # ═══════════════════════════════════════════════════════════════════
-SEQ_LEN             = 3    # 从 6 降到 3（减少特征维度，每折样本更多）
+SEQ_LEN             = 6    # 从 3 恢复到 6（数据量充足后可用更长序列）
 EMBARGO_GAP         = 4
-K_FOLDS             = 3    # 从 4 降到 3（每折样本更多）
+K_FOLDS             = 4    # 从 3 恢复到 4（数据量充足后折数更多更稳）
 MAX_EPOCHS_VAE      = 60     # baseline Stage 1 VAE 最大轮数（与 v3/v4 一致）
 MAX_EPOCHS_HEAD     = 40     # baseline Stage 2 预测头最大轮数（与 v3/v4 一致）
 PATIENCE            = 8
 MIN_TRAIN_SIZE      = 100
-MIN_VALID_RESIDUALS = 20    # 从 50 降到 20（适配对齐后的小数据集）
-F_STAT_THRESHOLD    = 3.0   # 从 10.0 降到 3.0（更多操作变量通过弱工具检验）
-MIN_BOOTSTRAP_SUCCESS_RATE = 0.20  # bootstrap 最低成功率（从 0.5 降到 0.20）
+MIN_VALID_RESIDUALS = 30   # 从 20 升到 30（IQR 过滤后残差更干净，可适当提高）
+F_STAT_THRESHOLD    = 3.0  # 保持 3.0（v5 比 baseline 宽松，合理）
+MIN_BOOTSTRAP_SUCCESS_RATE = 0.40  # 从 0.20 升到 0.40（数据充足后提高质量标准）
 
 LATENT_DIM      = 32
 BETA_KL         = 0.1
@@ -251,7 +251,7 @@ def build_safe_x_with_dag(op: str, df: pd.DataFrame, states: list,
         parts = [f"{r}={len(v)}" for r, v in excluded_details.items() if v]
         print(f"  [DAG过滤] {op}: 剔除 {n_excluded} 个变量 ({', '.join(parts)})，"
               f"保留 {len(filtered_x)} 个控制变量")
-    return filtered_x
+    return refine_safe_x(op, df, filtered_x)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -786,6 +786,36 @@ def _train_head_stage2_baseline(head: PredHead, mu_train: torch.Tensor,
         head.load_state_dict(best_state)
 
 
+# ══════════════════════════════════════════════════════════════════
+#  IQR 离群过滤（替代 3σ，对 ffill 后低方差 Y 不崩溃）
+# ══════════════════════════════════════════════════════════════════
+def _iqr_mask(arr: np.ndarray, k: float = 3.0) -> np.ndarray:
+    """
+    基于 IQR 的离群点过滤掩码。
+
+    相比 3σ 方法的优势：
+      - 当 arr 几乎是常数（std ≈ 0，如 ffill 后的 Y 残差）时，
+        3σ 阈值 ≈ 0 → 几乎所有点都被删除。
+      - IQR 方法：当 IQR < 1e-8 时直接返回全 True，保留所有点。
+
+    参数
+    ----
+    arr : 残差数组
+    k   : IQR 倍数（默认 3.0，等效于约 3σ 的覆盖范围）
+
+    返回
+    ----
+    mask : bool 数组，True 表示保留
+    """
+    q25, q75 = np.percentile(arr, 25), np.percentile(arr, 75)
+    iqr = q75 - q25
+    if iqr < 1e-8:
+        # 数组几乎是常数（比如 ffill 导致的平坦 Y 残差）
+        # → 跳过过滤，保留全部点
+        return np.ones(len(arr), dtype=bool)
+    return np.abs(arr - np.median(arr)) < k * iqr
+
+
 # ═══════════════════════════════════════════════════════════════════
 #  确定性哈希种子
 # ═══════════════════════════════════════════════════════════════════
@@ -1039,9 +1069,8 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
         res_D   = np.array(all_res_D, dtype=np.float64)
         weights = np.array(all_weights, dtype=np.float64)
 
-        # 去离群（3σ）
-        mask = ((np.abs(res_Y) < 3 * res_Y.std()) &
-                (np.abs(res_D) < 3 * res_D.std()))
+        # 去离群（IQR 方法，对 ffill 后低方差 Y 不崩溃）
+        mask = _iqr_mask(res_Y) & _iqr_mask(res_D)
         res_Y, res_D, weights = res_Y[mask], res_D[mask], weights[mask]
         if len(res_D) < MIN_VALID_RESIDUALS:
             continue
@@ -1119,6 +1148,37 @@ def get_safe_x(op: str, df: pd.DataFrame, states: list) -> list:
         if best_s_r > 0.05 and best_s_l >= best_t_lag:
             safe_x.append(st)
     return safe_x
+
+
+SAFE_X_MAX_COUNT = 20  # 控制变量上限，防止高维过拟合
+
+
+def _safe_abs_corr(a: np.ndarray, b: np.ndarray) -> float:
+    mask = np.isfinite(a) & np.isfinite(b)
+    if mask.sum() < 3:
+        return 0.0
+    a_valid, b_valid = a[mask], b[mask]
+    if np.std(a_valid) < 1e-8 or np.std(b_valid) < 1e-8:
+        return 0.0
+    corr = np.corrcoef(a_valid, b_valid)[0, 1]
+    return float(abs(corr)) if np.isfinite(corr) else 0.0
+
+
+def refine_safe_x(op: str, df: pd.DataFrame, safe_x: list,
+                  max_controls: int = SAFE_X_MAX_COUNT) -> list:
+    """按相关性打分，裁剪 safe_x 至上限，防止高维过拟合。"""
+    if max_controls <= 0 or len(safe_x) <= max_controls:
+        return safe_x
+    y_vals = df["Y_grade"].values.astype(np.float64)
+    d_vals = df[op].ffill().fillna(df[op].mean()).values.astype(np.float64)
+    scored = []
+    for var in safe_x:
+        x_vals = df[var].ffill().fillna(df[var].mean()).values.astype(np.float64)
+        corr_y = _safe_abs_corr(x_vals, y_vals)
+        corr_d = _safe_abs_corr(x_vals, d_vals)
+        scored.append((corr_y + 0.5 * corr_d, var))
+    scored.sort(reverse=True)
+    return [var for _, var in scored[:max_controls]]
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1856,20 +1916,22 @@ def main():
         operability_csv=args.operability_csv,
     )
 
-    # ── 窗口聚合对齐（将每行 Y 测量时间点作为锚点，汇聚 X/D 统计量）──
-    from build_aligned_dataset import build_aligned_dataset
-    operable_cols_raw   = sorted(operable_in_df_raw   & set(df_raw.columns))
-    observable_cols_raw = sorted(observable_in_df_raw & set(df_raw.columns))
-    df, new_operable, new_observable = build_aligned_dataset(
-        df_raw,
-        operable_cols  = operable_cols_raw,
-        observable_cols= observable_cols_raw,
-        window_minutes = 30,
-        y_ffill_limit  = 2,
-    )
-    # update sets after alignment
-    operable_in_df   = set(new_operable)
-    observable_in_df = set(new_observable)
+    # ── 直接使用原始数据（跳过窗口聚合，保留全部 ~1900 行）──────
+    df = df_raw.copy()
+
+    feature_cols = [c for c in df.columns if c != "Y_grade"]
+    df[feature_cols] = df[feature_cols].ffill()
+
+    df["Y_grade"] = df["Y_grade"].ffill()
+    df = df.dropna(subset=["Y_grade"])
+    df = df.fillna(df.mean(numeric_only=True))
+
+    operable_in_df   = operable_in_df_raw   & set(df.columns)
+    observable_in_df = observable_in_df_raw & set(df.columns)
+
+    print(f"[数据模式] 原始数据直接使用（无窗口聚合）")
+    print(f"  行数: {len(df)}，操作变量: {len(operable_in_df)}，状态变量: {len(observable_in_df)}")
+    print(f"  样本/维度比（估计）: {len(df) / max(1, len(observable_in_df)):.1f}x")
 
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
