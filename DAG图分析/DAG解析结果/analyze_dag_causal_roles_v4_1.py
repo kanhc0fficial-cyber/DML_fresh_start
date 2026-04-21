@@ -101,6 +101,11 @@ DEFAULT_PROJECT_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", ".."))
 # 先尝试 operability，再尝试 annotated
 _CSV_CANDIDATES = [
     os.path.join(
+        DEFAULT_PROJECT_ROOT, "data",
+        "操作变量和混杂变量",
+        "non_collinear_representative_vars_operability.csv",
+    ),
+    os.path.join(
         DEFAULT_PROJECT_ROOT, "数据预处理",
         "数据与处理结果-分阶段-去共线性后",
         "non_collinear_representative_vars_operability.csv",

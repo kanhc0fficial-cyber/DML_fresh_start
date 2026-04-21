@@ -95,8 +95,8 @@ Y_PARQUET             = os.path.join(DATA_DIR, "y_target_final.parquet")
 # ── 操作性分类表（classify_operability.py 输出）──────────────────
 #   可通过 --operability-csv 命令行参数覆盖
 DEFAULT_OPERABILITY_CSV = os.path.join(
-    REPO_ROOT, "数据预处理",
-    "数据与处理结果-分阶段-去共线性后",
+    REPO_ROOT, "data",
+    "操作变量和混杂变量",
     "non_collinear_representative_vars_operability.csv",
 )
 

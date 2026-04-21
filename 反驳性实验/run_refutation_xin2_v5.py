@@ -122,8 +122,8 @@ X_PARQUET             = os.path.join(DATA_DIR, "X_features_final.parquet")
 Y_PARQUET             = os.path.join(DATA_DIR, "y_target_final.parquet")
 
 DEFAULT_OPERABILITY_CSV = os.path.join(
-    REPO_ROOT, "数据预处理",
-    "数据与处理结果-分阶段-去共线性后",
+    REPO_ROOT, "data",
+    "操作变量和混杂变量",
     "non_collinear_representative_vars_operability.csv",
 )
 
@@ -143,15 +143,16 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # ═══════════════════════════════════════════════════════════════════
 #  超参（继承 v4 全部 + v5 新增）
 # ═══════════════════════════════════════════════════════════════════
-SEQ_LEN             = 6
+SEQ_LEN             = 3    # 从 6 降到 3（减少特征维度，每折样本更多）
 EMBARGO_GAP         = 4
-K_FOLDS             = 4
+K_FOLDS             = 3    # 从 4 降到 3（每折样本更多）
 MAX_EPOCHS_VAE      = 60     # baseline Stage 1 VAE 最大轮数（与 v3/v4 一致）
 MAX_EPOCHS_HEAD     = 40     # baseline Stage 2 预测头最大轮数（与 v3/v4 一致）
 PATIENCE            = 8
 MIN_TRAIN_SIZE      = 100
-MIN_VALID_RESIDUALS = 50
-F_STAT_THRESHOLD    = 10.0
+MIN_VALID_RESIDUALS = 20    # 从 50 降到 20（适配对齐后的小数据集）
+F_STAT_THRESHOLD    = 3.0   # 从 10.0 降到 3.0（更多操作变量通过弱工具检验）
+MIN_BOOTSTRAP_SUCCESS_RATE = 0.20  # bootstrap 最低成功率（从 0.5 降到 0.20）
 
 LATENT_DIM      = 32
 BETA_KL         = 0.1
@@ -1077,7 +1078,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
                   f"处理样本不足（不平衡率 {imbalance_rate:.1%}，仍保留训练）")
 
     # ── Bootstrap 聚合 ──────────────────────────────────────────────
-    min_success = max(1, n_bootstrap // 2)
+    min_success = max(1, int(n_bootstrap * MIN_BOOTSTRAP_SUCCESS_RATE))
     if len(theta_list) < min_success:
         return None
 
@@ -1851,9 +1852,25 @@ def main():
     print(f" 交叉拟合策略: {_fmt_cf_cfg(cf_cfg)}")
     print("=" * 70)
 
-    df, operable_in_df, observable_in_df = build_xin2_data(
+    df_raw, operable_in_df_raw, observable_in_df_raw = build_xin2_data(
         operability_csv=args.operability_csv,
     )
+
+    # ── 窗口聚合对齐（将每行 Y 测量时间点作为锚点，汇聚 X/D 统计量）──
+    from build_aligned_dataset import build_aligned_dataset
+    operable_cols_raw   = sorted(operable_in_df_raw   & set(df_raw.columns))
+    observable_cols_raw = sorted(observable_in_df_raw & set(df_raw.columns))
+    df, new_operable, new_observable = build_aligned_dataset(
+        df_raw,
+        operable_cols  = operable_cols_raw,
+        observable_cols= observable_cols_raw,
+        window_minutes = 30,
+        y_ffill_limit  = 2,
+    )
+    # update sets after alignment
+    operable_in_df   = set(new_operable)
+    observable_in_df = set(new_observable)
+
     if args.sample_size > 0:
         df = df.iloc[-args.sample_size:].copy()
         print(f"[调参模式] 截取最近 {args.sample_size} 条数据（共 {len(df)} 条）")

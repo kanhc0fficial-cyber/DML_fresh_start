@@ -230,26 +230,37 @@ def prepare_data(line: str, resample_freq: str = "10min"):
 
     # 加载时序宽表（连续 1min 时序，供时序因果发现算法使用）
     dataset_path = os.path.join(DATA_DIR, f"timeseries_dataset_{line}_final.parquet")
-    if not os.path.exists(dataset_path):
+    fallback_path = os.path.join(DATA_DIR, f"modeling_dataset_{line}_final.parquet")
+
+    if os.path.exists(dataset_path):
+        using_fallback = False
+        df_raw = pd.read_parquet(dataset_path)
+        df_raw.index = pd.to_datetime(df_raw.index).tz_localize(None)
+    elif os.path.exists(fallback_path):
+        using_fallback = True
+        print(f"  [警告] 时序宽表 {dataset_path} 不存在，回退到建模宽表 {fallback_path}")
+        print(f"  [注意] 建模宽表行数较少（化验时间点），时序因果发现性能可能下降")
+        df_raw = pd.read_parquet(fallback_path)
+        df_raw.index = pd.to_datetime(df_raw.index).tz_localize(None)
+    else:
         raise FileNotFoundError(
-            f"找不到时序宽表: {dataset_path}\n"
+            f"找不到时序宽表或建模宽表:\n"
+            f"  时序宽表（推荐）: {dataset_path}\n"
+            f"  建模宽表（回退）: {fallback_path}\n"
             f"请先运行 data_processing/merge_final.py --line {line}"
         )
-
-    df_raw = pd.read_parquet(dataset_path)
-    df_raw.index = pd.to_datetime(df_raw.index).tz_localize(None)
 
     # 确认 Y 列存在
     if y_col not in df_raw.columns:
         raise KeyError(
-            f"时序宽表中没有 Y 列 '{y_col}'，请检查 data_processing/merge_final.py 的输出。"
+            f"数据集中没有 Y 列 '{y_col}'，请检查数据预处理脚本的输出。"
         )
 
     # 只保留在 valid_vars 中且实际存在于数据集的特征列
     X_cols = [c for c in valid_vars if c in df_raw.columns]
     missing = [c for c in valid_vars if c not in df_raw.columns]
     if missing:
-        print(f"  [警告] {len(missing)} 个变量不在时序宽表中，将跳过: {missing[:5]}...")
+        print(f"  [警告] {len(missing)} 个变量不在数据集中，将跳过: {missing[:5]}...")
 
     # 构建输出 DataFrame：选取 X 特征列 + Y 列（重命名为 y_grade）
     df = df_raw[X_cols].copy()
@@ -277,7 +288,8 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     df = df.dropna(subset=["y_grade"])
 
     # 按 resample_freq 重采样（默认 10min），降低计算量同时保留时序结构
-    if resample_freq:
+    # 回退到建模宽表时跳过重采样（行数少，无需降采样）
+    if resample_freq and not using_fallback:
         df = df.resample(resample_freq).last().dropna(subset=["y_grade"])
 
     # 剔除填充后仍为全 NaN 的 X 特征列（整段停产的传感器通道）
@@ -292,7 +304,8 @@ def prepare_data(line: str, resample_freq: str = "10min"):
     var_to_stage = {v: s for v, s in var_to_stage.items() if v in X_cols_set}
     var_to_group = {v: g for v, g in var_to_group.items() if v in X_cols_set}
 
-    print(f"  [产线={line}] 时序宽表: {n_raw} 行 (原始 1min) → {len(df)} 行 "
+    data_source = "建模宽表(回退)" if using_fallback else "时序宽表"
+    print(f"  [产线={line}] {data_source}: {n_raw} 行 → {len(df)} 行 "
           f"(重采样 {resample_freq or '无'}) | Y 真实化验点={n_y_obs} | "
           f"特征列={len(X_cols)} | Y={y_col} | "
           f"时间范围: {df.index.min()} ~ {df.index.max()}")
