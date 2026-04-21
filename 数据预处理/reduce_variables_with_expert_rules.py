@@ -55,6 +55,18 @@ STAGE_NAMES = {
     8: "精矿脱水",
 }
 
+STAGE_HEURISTICS = [
+    (0, ("CXXY_", "FX_GFJ", "MC1_AH", "MC2_RC"), ()),
+    (1, ("FX_LT_6", "FX_HV_63", "FX_JBC3", "FX_JBC19", "FX_LT_601"), ()),
+    (2, ("MC2_QC", "MC2_PET", "MC2_JYB", "EY", "CXG_", "XHCJ_", "LHCJ_"), ()),
+    (3, ("MC1_GKB", "MC1_FET", "MC1_FV", "MC1_LV", "MC1_TM", "MC1_LET", "MC2_YLB", "MC2_ZJB"), ()),
+    (4, ("FX_P", "MC2_NSJ", "MC2_CQC"), ()),
+    (5, ("FX_AT_", "FX_HGB", "FX_LGB2", "FX_TV_11", "FX_TV_21", "FX_FT_17", "FX_FT_27"), ()),
+    (6, ("FX_X1", "FX_X2", "FX_FXJ", "FX_ZJB1", "FX_DT_", "FX_AH"), ()),
+    (7, (), ("尾矿", "事故池", "尾矿泵")),
+    (8, (), ("精矿", "压滤", "脱水")),
+]
+
 EXPERT_PRINCIPLES = [
     "原矿品位、磁性铁、亚铁、碳酸铁是前馈边界条件，应优先保留。",
     "磁选区的核心控制变量是励磁电压/电流、尾矿阀门、给矿/冲矿压力与液位；纯电气健康量可降维。",
@@ -127,24 +139,11 @@ def infer_stage(name: str, desc: str, known_stage: int | None) -> tuple[int | No
     upper = name.upper()
     text = f"{upper} {desc}"
 
-    if upper.startswith(("CXXY_", "FX_GFJ", "MC1_AH", "MC2_RC")):
-        return 0, "heuristic"
-    if upper.startswith(("FX_LT_6", "FX_HV_63", "FX_JBC3", "FX_JBC19", "FX_LT_601")):
-        return 1, "heuristic"
-    if upper.startswith(("MC2_QC", "MC2_PET", "MC2_JYB", "EY", "CXG_", "XHCJ_", "LHCJ_")):
-        return 2, "heuristic"
-    if upper.startswith(("MC1_GKB", "MC1_FET", "MC1_FV", "MC1_LV", "MC1_TM", "MC1_LET", "MC2_YLB", "MC2_ZJB")):
-        return 3, "heuristic"
-    if upper.startswith(("FX_P", "MC2_NSJ", "MC2_CQC")):
-        return 4, "heuristic"
-    if upper.startswith(("FX_AT_", "FX_HGB", "FX_LGB2", "FX_TV_11", "FX_TV_21", "FX_FT_17", "FX_FT_27")):
-        return 5, "heuristic"
-    if upper.startswith(("FX_X1", "FX_X2", "FX_FXJ", "FX_ZJB1", "FX_DT_", "FX_AH")):
-        return 6, "heuristic"
-    if contains_any(text, ["尾矿", "事故池", "尾矿泵"]):
-        return 7, "heuristic"
-    if contains_any(text, ["精矿", "压滤", "脱水"]):
-        return 8, "heuristic"
+    for stage_id, prefixes, keywords in STAGE_HEURISTICS:
+        if prefixes and upper.startswith(prefixes):
+            return stage_id, "heuristic"
+        if keywords and contains_any(text, keywords):
+            return stage_id, "heuristic"
     return None, "unknown"
 
 
@@ -185,6 +184,7 @@ def classify_signal(name: str, desc: str, stage_id: int | None) -> tuple[str, st
     if contains_any(text, ["浮选机", "渣浆泵", "螺杆泵", "化工泵", "鼓风机", "搅拌槽"]) and contains_any(text, ["电流", "频率反馈"]) and stage_id in {5, 6}:
         return "support_equipment_load", "设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。", False
 
+    # 此处依赖 normalize_text() 先将 NaN / "nan" / 空白统一归一为空字符串。
     if desc == "":
         return "unidentified_signal", "缺少中文描述且无法从命名稳定识别工艺语义，保守删除。", False
 
@@ -312,7 +312,8 @@ def main() -> None:
     keep_col = "Keep_All" if line_mode == "all" else f"Keep_{line_mode}"
 
     df_parquet = pd.read_parquet(input_parquet)
-    selected_vars = [v for v in analysis.loc[analysis[keep_col] == "keep", "Variable_Name"] if v in df_parquet.columns]
+    candidate_vars = analysis.loc[analysis[keep_col] == "keep", "Variable_Name"].tolist()
+    selected_vars = [v for v in candidate_vars if v in df_parquet.columns]
     target_cols = [c for c in df_parquet.columns if c.lower().startswith("y_")]
     reduced_cols = selected_vars + [c for c in target_cols if c not in selected_vars]
     reduced_df = df_parquet.loc[:, reduced_cols]
