@@ -117,6 +117,15 @@ DML_fresh_start/
 | **功能** | 将产线归属标签 (A=新1专线, B=新2专线, C=公用) 同步到变量名册 |
 | **运行** | `python 数据预处理/sync_group_to_annotated.py` |
 
+### 2.5 `reduce_variables_with_expert_rules.py` — 专家知识驱动降维
+
+| 项 | 说明 |
+|----|------|
+| **输入** | `data/操作变量和混杂变量/non_collinear_representative_vars_operability.csv` + `东鞍山烧结厂选矿专家知识.txt` + `data/modeling_dataset*.parquet` |
+| **输出** | `数据预处理/结果/expert_variable_reduction_analysis.csv`、`expert_variable_reduction_report.md`、`expert_aggregation_concepts.csv`、`data/*_expert_reduced.parquet` |
+| **功能** | 按专家知识逐变量判断 keep / aggregate / drop，以“概念级聚合优先”方式输出降维后的 parquet，并对缺失但必须保留的流程概念输出占位列 |
+| **运行** | `python 数据预处理/reduce_variables_with_expert_rules.py --input-parquet data/modeling_dataset_final.parquet` |
+
 ---
 
 ## 步骤 3：因果发现 (`多种方法因果发现/`)

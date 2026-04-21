@@ -1,0 +1,30 @@
+﻿feature_name,feature_cn,process,role,method,source_var_count,available_var_count,source_vars,reason
+agg_mag_excit_voltage,磁选_励磁电压,磁选,励磁电压,mean,13,13,MC2_QC501_LCDY_AI; MC2_QC502_LCDY_AI; MC2_QC506_LCDY_AI; MC2_QC507_LCDY_AI; MC2_QC508_LCDY_AI; MC2_QC510_LCDY_AI; MC2_QC601_LCDY_AI; MC2_QC602_LCDY_AI; MC2_QC606_LCDY_AI; MC2_QC607_LCDY_AI; MC2_QC608_LCDY_AI; MC2_QC609_LCDY_AI; MC2_QC610_LCDY_AI,强磁机励磁电压是磁选强度的直接控制量，13 台并联机器取均值反映全区励磁水平。
+agg_mag_excit_current,磁选_励磁电流,磁选,励磁电流,mean,12,12,MC2_QC501_LCDL_AI; MC2_QC502_LCDL_AI; MC2_QC503_LCDL_AI; MC2_QC504_LCDL_AI; MC2_QC505_LCDL_AI; MC2_QC507_LCDL_AI; MC2_QC508_LCDL_AI; MC2_QC510_LCDL_AI; MC2_QC601_LCDL_AI; MC2_QC607_LCDL_AI; MC2_QC608_LCDL_AI; MC2_QC609_LCDL_AI,强磁机励磁电流是磁场强度的实际测量值，12 台并联机器取均值。
+agg_mag_coil_temp,磁选_线圈温度,磁选,线圈温度,mean,10,10,MC2_QC501_XQWD_AI; MC2_QC503_XQWD_AI; MC2_QC504_XQWD_AI; MC2_QC506_XQWD_AI; MC2_QC507_XQWD_AI; MC2_QC508_XQWD_AI; MC2_QC601_XQWD_AI; MC2_QC606_XQWD_AI; MC2_QC607_XQWD_AI; MC2_QC609_XQWD_AI,线圈温度反映磁选机热负荷状态，取均值作为全区代表温度。
+agg_mag_tailings_valve1,磁选_1号尾矿阀开度,磁选,尾矿阀1开度,mean,10,10,MC2_QC501_WKF1_AI; MC2_QC509_WKF1_AI; MC2_QC510_WKF1_AI; MC2_QC601_WKF1_AI; MC2_QC603_WKF1_AI; MC2_QC606_WKF1_AI; MC2_QC607_WKF1_AI; MC2_QC608_WKF1_AI; MC2_QC609_WKF1_AI; MC2_QC610_WKF1_AI,1# 尾矿阀门开度控制排尾量，10 台并联取均值。
+agg_mag_tailings_valve2,磁选_2号尾矿阀开度,磁选,尾矿阀2开度,mean,14,14,MC2_QC501_WKF2_AI; MC2_QC502_WKF2_AI; MC2_QC503_WKF2_AI; MC2_QC504_WKF2_AI; MC2_QC505_WKF2_AI; MC2_QC506_WKF2_AI; MC2_QC507_WKF2_AI; MC2_QC508_WKF2_AI; MC2_QC510_WKF2_AI; MC2_QC602_WKF2_AI; MC2_QC606_WKF2_AI; MC2_QC607_WKF2_AI; MC2_QC609_WKF2_AI; MC2_QC610_WKF2_AI,2# 尾矿阀门开度与 1# 合并可看出阀门调节整体状态，14 台并联取均值。
+agg_mag_blowdown_valve,磁选_排污阀开度,磁选,排污阀开度,mean,10,10,MC2_QC501_PWF_AI; MC2_QC502_PWF_AI; MC2_QC503_PWF_AI; MC2_QC507_PWF_AI; MC2_QC510_PWF_AI; MC2_QC606_PWF_AI; MC2_QC607_PWF_AI; MC2_QC608_PWF_AI; MC2_QC609_PWF_AI; MC2_QC610_PWF_AI,排污阀开度反映磁选机排矿状态，10 台并联取均值。
+agg_mag_pulsation_freq,磁选_脉动电机频率,磁选,脉动频率,mean,19,19,MC2_QC501_MDPL_AI; MC2_QC502_MDPL_AI; MC2_QC503_MDPL_AI; MC2_QC504_MDPL_AI; MC2_QC505_MDPL_AI; MC2_QC506_MDPL_AI; MC2_QC507_MDPL_AI; MC2_QC508_MDPL_AI; MC2_QC509_MDPL_AI; MC2_QC510_MDPL_AI; MC2_QC601_MDPL_AI; MC2_QC602_MDPL_AI; MC2_QC603_MDPL_AI; MC2_QC604_MDPL_AI; MC2_QC606_MDPL_AI; MC2_QC607_MDPL_AI; MC2_QC608_MDPL_AI; MC2_QC609_MDPL_AI; MC2_QC610_MDPL_AI,脉动频率直接影响磁选分离效果，19 台并联取均值为全区脉动水平代表。
+agg_mag_ring_freq,磁选_转环频率,磁选,转环频率,mean,13,13,MC2_QC501_ZHPL_AI; MC2_QC502_ZHPL_AI; MC2_QC507_ZHPL_AI; MC2_QC508_ZHPL_AI; MC2_QC509_ZHPL_AI; MC2_QC510_ZHPL_AI; MC2_QC601_ZHPL_AI; MC2_QC602_ZHPL_AI; MC2_QC604_ZHPL_AI; MC2_QC607_ZHPL_AI; MC2_QC608_ZHPL_AI; MC2_QC609_ZHPL_AI; MC2_QC610_ZHPL_AI,转环频率控制磁选机矿浆处理速率，13 台并联取均值。
+agg_mag_level,磁选_选矿液位,磁选,选矿液位,mean,9,9,MC2_QC501_XKYW_AI; MC2_QC504_XKYW_AI; MC2_QC505_XKYW_AI; MC2_QC507_XKYW_AI; MC2_QC508_XKYW_AI; MC2_QC601_XKYW_AI; MC2_QC606_XKYW_AI; MC2_QC609_XKYW_AI; MC2_QC610_XKYW_AI,磁选槽内液位反映矿浆充填程度，9 台并联取均值。注：部分仪表精度较低。
+agg_mag_flush_water_pressure,磁选_冲矿水压力,磁选,冲矿水压力,mean,5,5,MC2_QC502_CKSRKYL_AI; MC2_QC508_CKSYL_AI; MC2_QC510_CKSYL_AI; MC2_QC610_CKSYL_AI; MC2_QC609_CKSCKYL_AI,冲矿水压力（入口/总/出口）反映磁选区冲洗条件，5 个代表测点取均值。
+agg_mag_motor_current_rc,磁选_主电机A相电流,磁选,电机电流,mean,2,2,MC2_RC101_DL_AI; MC2_RC102_DL_AI,MC2_RC101/102 的 A 相电流是磁选机主电机电流的代表变量，2 台取均值。
+agg_mag_motor_voltage_rc,磁选_主电机BC线电压,磁选,电机电压,mean,3,3,MC2_RC101_DY_AI; MC2_RC102_DY_AI; MC2_RC106_DY_AI,MC2_RC101/102/106 的 BC 线电压是磁选机主电机电压代表，3 台取均值。
+agg_tm_motor_current,塔磨_主电机电流,塔磨,主电机电流,mean,5,5,MC1_TM201_ZDJ_DL_AI; MC1_TM202_ZDJ_DL_AI; MC1_TM204_ZDJ_DL_AI; MC1_TM205_ZDJ_DL_AI; MC1_TM206_ZDJ_DL_AI,6 台塔磨并联运行，主电机电流反映各机磨矿载荷，5 台有代表变量，取均值。
+agg_tm_reducer_oil_temp,塔磨_减速机油池温度,塔磨,减速机油温,mean,2,2,MC1_TM201_JSJ_YC_WD_AI; MC1_TM204_JSJ_YC_WD_AI,减速机油池温度反映润滑状态，2 台有代表变量，取均值。
+agg_tm_reducer_outlet_temp,塔磨_减速机出油口温度,塔磨,减速机出油温,mean,4,4,MC1_TM201_JSJ_CYK_WD_AI; MC1_TM204_JSJ_CYK_WD_AI; MC1_TM205_JSJ_CYK_WD_AI; MC1_TM206_JSJ_CYK_WD_AI,减速机出油口温度是润滑系统实时热状态，4 台有代表变量，取均值。
+agg_tm_cyclone_pump_current,塔磨_三旋给矿泵电流,塔磨,给矿泵电流,mean,8,8,MC1_GKB702_DL; MC1_GKB703_DL; MC1_GKB704_DL; MC1_GKB706_DL; MC1_GKB707_DL; MC1_GKB708_DL; MC1_GKB710_DL; MC1_GKB711_DL,12 台三旋给矿泵并联，8 台有电流代表变量，取均值反映泵组整体负荷。
+agg_tm_cyclone_pump_freq,塔磨_三旋给矿泵频率,塔磨,给矿泵频率,mean,2,2,MC1_GKB709_HZ; MC1_GKB711_HZ,12 台三旋给矿泵中 2 台有频率反馈代表变量，取均值。
+agg_tm_cyclone_sand_water_flow,塔磨_旋流器沉砂加水流量,塔磨,沉砂加水量,mean,3,3,MC1_FET101_AI; MC1_FET301_AI; MC1_FET601_AI,三次分级旋流器沉砂补水，6 组中 3 组有代表变量，取均值。
+agg_tm_cyclone_feed_flow,塔磨_旋流器给矿管道流量,塔磨,给矿流量,mean,6,6,MC1_FET102_AI; MC1_FET202_AI; MC1_FET302_AI; MC1_FET402_AI; MC1_FET502_AI; MC1_FET602_AI,三次分级旋流器给矿流量，6 组均有代表变量，取均值反映整体给矿水平。
+agg_tm_cyclone_sand_valve_setpoint,塔磨_旋流器沉砂水阀位给定,塔磨,沉砂水阀给定,mean,5,5,MC1_FV101_AO; MC1_FV201_AO; MC1_FV301_AO; MC1_FV401_AO; MC1_FV501_AO,旋流器沉砂加水阀位给定（AO），5 组并联取均值为控制意图代表。
+agg_tm_cyclone_sand_valve_feedback,塔磨_旋流器沉砂水阀位反馈,塔磨,沉砂水阀反馈,mean,3,3,MC1_FV101_AI; MC1_FV201_AI; MC1_FV401_AI,旋流器沉砂加水阀位反馈（AI），3 组并联取均值，与给定一起反映阀门控制状态。
+agg_tm_cyclone_pool_valve_setpoint,塔磨_旋流器泵池水阀位给定,塔磨,泵池水阀给定,mean,2,2,MC1_LV101_AO; MC1_LV301_AO,旋流器给矿泵池加水阀位给定，2 组并联取均值。
+agg_tm_cyclone_pool_level,塔磨_旋流器给矿泵池液位,塔磨,泵池液位,mean,3,3,MC1_LET101_AI; MC1_LET301_AI; MC1_LET501_AI,三次分级旋流器给矿泵池液位，3 组并联取均值反映整体液位水平。
+agg_tm_cyclone_overflow_pool_level,塔磨_旋流器溢流泵池液位,塔磨,溢流泵池液位,mean,3,3,MC2_LET_102_AI; MC2_LET_302_AI; MC2_LET_502_AI,三次分级旋流器溢流泵池液位，3 个并联泵池取均值，反映后段矿浆缓冲状态。
+agg_tm_overflow_pump_current,塔磨_旋流器溢流泵电流,塔磨,溢流泵电流,mean,4,4,MC2_YLB802_DL; MC2_YLB805_DL; MC2_YLB806_DL; MC2_YLB809_DL,旋流器溢流泵电流反映泵组负荷，4 台有代表变量，取均值。
+agg_accident_pump_freq,尾矿_事故泵频率,尾矿,事故泵频率,mean,2,2,MC2_SGB1002_HZ; MC2_SGB1003_HZ,事故泵 2# 和 3# 为同类设备，频率取均值。
+agg_accident_pump_current,尾矿_事故泵电流,尾矿,事故泵电流,mean,2,2,MC2_SGB1002_DL; MC2_SGB1003_DL,事故泵 2# 和 3# 为同类设备，电流取均值。
+agg_bottom_pump_freq_setpoint,底流_渣浆泵频率给定,底流,频率给定,mean,2,2,MC2_ZJB02_AO; MC2_ZJB03_AO,底流泵站 2# 和 3# 渣浆泵为同类设备，频率给定取均值。
+agg_bottom_pump_current,底流_渣浆泵电流,底流,电流,mean,2,2,MC2_ZJB01_DL; MC2_ZJB04_DL,底流泵站 1# 和 4# 渣浆泵为同类设备，电流取均值。
