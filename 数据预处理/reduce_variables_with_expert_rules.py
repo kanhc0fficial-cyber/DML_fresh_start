@@ -25,10 +25,13 @@ from typing import Iterable
 import pandas as pd
 
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
-RESULT_DIR = Path(__file__).resolve().parent / "结果"
+RESULT_DIR = SCRIPT_DIR / "结果"
 RESULT_DIR.mkdir(exist_ok=True)
+MAX_PREVIEW_VARS = 10
+EXPERT_EXCERPT_MAX_LENGTH = 1000
 
 DEFAULT_VARIABLES_CSV = DATA_DIR / "操作变量和混杂变量" / "non_collinear_representative_vars_operability.csv"
 DEFAULT_EXPERT_DOC = REPO_ROOT / "东鞍山烧结厂选矿专家知识.txt"
@@ -185,7 +188,7 @@ def classify_signal(name: str, desc: str, stage_id: int | None) -> tuple[str, st
     if contains_any(text, ["浮选机", "渣浆泵", "螺杆泵", "化工泵", "鼓风机", "搅拌槽"]) and contains_any(text, ["电流", "频率反馈"]) and stage_id in {5, 6}:
         return "support_equipment_load", "设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。", False
 
-    # build_analysis() 会先对 Description_CN 调用 normalize_text()，因此此处空字符串即代表缺失描述。
+    # classify_signal() 由 build_analysis() 调用；传入前 Description_CN 已经 normalize_text() 归一化。
     if desc == "":
         return "unidentified_signal", "缺少中文描述且无法从命名稳定识别工艺语义，保守删除。", False
 
@@ -316,8 +319,8 @@ def main() -> None:
     candidate_vars = analysis.loc[analysis[keep_col] == "keep", "Variable_Name"].tolist()
     missing_vars = [v for v in candidate_vars if v not in df_parquet.columns]
     if missing_vars:
-        preview = ", ".join(missing_vars[:10])
-        suffix = " ..." if len(missing_vars) > 10 else ""
+        preview = ", ".join(missing_vars[:MAX_PREVIEW_VARS])
+        suffix = " ..." if len(missing_vars) > MAX_PREVIEW_VARS else ""
         print(f"[warn] {len(missing_vars)} 个保留变量未出现在输入 parquet 中：{preview}{suffix}")
     selected_vars = [v for v in candidate_vars if v in df_parquet.columns]
     target_cols = [c for c in df_parquet.columns if c.lower().startswith("y_")]
@@ -330,8 +333,8 @@ def main() -> None:
     expert_excerpt = ""
     if expert_doc.exists():
         text = expert_doc.read_text(encoding="utf-8", errors="replace")
-        expert_excerpt = text[:1000].strip()
-        if len(text) > 1000:
+        expert_excerpt = text[:EXPERT_EXCERPT_MAX_LENGTH].strip()
+        if len(text) > EXPERT_EXCERPT_MAX_LENGTH:
             expert_excerpt += "..."
 
     analysis_csv.parent.mkdir(parents=True, exist_ok=True)
