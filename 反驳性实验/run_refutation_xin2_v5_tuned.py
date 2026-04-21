@@ -156,7 +156,7 @@ F_STAT_THRESHOLD           = 5.0   # 比 RF 调优版的 6 更宽松，给复杂
 MIN_BOOTSTRAP_SUCCESS_RATE = 0.40
 MIN_SUCCESS_RATE_FLOOR     = 0.20
 MAX_SUCCESS_RATE_CEIL      = 1.00
-SAFE_X_MAX_COUNT           = 28    # 28 明显小于 RF 调优版的 40，用更激进裁剪抑制高维过拟合
+SAFE_X_MAX_COUNT           = 28    # 28 明显小于 RF baseline v1_tuned 的 40，用更激进裁剪抑制高维过拟合
 
 LATENT_DIM      = 32
 BETA_KL         = 0.05
@@ -192,7 +192,7 @@ LAMBDA_RECON_FINAL = 0.4  # 精调期重建损失权重（< 1，降权）
 
 # 微创新 D：不确定性加权
 MC_SAMPLES                 = 5
-UNCERTAINTY_CLIP_QUANTILE  = 0.85  # 相比原始 0.90 更积极地下调高不确定性样本权重
+UNCERTAINTY_CLIP_QUANTILE  = 0.85  # 相比原始 0.90 更积极下调高不确定性样本权重
 
 
 # ══════════════════════════════════════════════════════════════════
