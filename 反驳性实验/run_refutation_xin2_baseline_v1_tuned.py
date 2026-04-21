@@ -121,15 +121,17 @@ K_FOLDS                    = 4    # 交叉拟合折数
 N_BOOTSTRAP                = 5    # Bootstrap 重复次数
 MIN_TRAIN_SIZE             = 100
 MIN_VALID_RESIDUALS        = 40
-F_STAT_THRESHOLD           = 6.0   # 从原始 10 放宽到 6，给弱但非纯噪声的处理变量留出诊断空间
+F_STAT_THRESHOLD           = 6.0   # 相比 v5 的 5 更保守一些，便于与更复杂模型做同口径对照
 MIN_BOOTSTRAP_SUCCESS_RATE = 0.40
+MIN_SUCCESS_RATE_FLOOR     = 0.20
+MAX_SUCCESS_RATE_CEIL      = 1.00
 SAFE_X_MAX_COUNT           = 40    # 对 RF 保留较宽控制集，避免像深度模型那样过度裁剪
 CV_WARN                    = 0.30  # CV 超过此值视为不稳定
 SIGN_RATE_MIN              = 0.70  # 符号一致率低于此值视为不可信
 
 # ── RF 超参 ────────────────────────────────────────────────────────
 RF_N_ESTIMATORS     = 200
-RF_MAX_DEPTH        = 4      # 保守默认值；XIN2 小样本/高维下优先稳健性，可用 --rf_max_depth 覆盖
+RF_MAX_DEPTH        = 4      # 先给保守起点；建议结合 --rf_max_depth 对比 4/5/6 三档
 RF_MIN_SAMPLES_LEAF = 10     # 对 1900 左右样本量偏保守，减少叶节点碎片化，可按数据量下调
 RF_MAX_FEATURES     = 0.5    # 降低单棵树对高维控制变量的敏感性
 
@@ -937,7 +939,7 @@ def main():
     N_BOOTSTRAP = args.n_bootstrap
     F_STAT_THRESHOLD = args.f_stat_threshold
     MIN_VALID_RESIDUALS = args.min_valid_residuals
-    MIN_BOOTSTRAP_SUCCESS_RATE = min(1.0, max(0.2, args.min_success_rate))
+    MIN_BOOTSTRAP_SUCCESS_RATE = min(MAX_SUCCESS_RATE_CEIL, max(MIN_SUCCESS_RATE_FLOOR, args.min_success_rate))
     SAFE_X_MAX_COUNT = max(0, args.max_safe_x)
     RF_N_ESTIMATORS = max(50, args.rf_n_estimators)
     RF_MAX_DEPTH = max(2, args.rf_max_depth)
