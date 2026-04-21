@@ -123,6 +123,7 @@ def load_stage_mapping(md_path: Path) -> dict[str, int]:
         try:
             stage_id = int(stage_text)
         except ValueError:
+            print(f"[warn] annotated markdown 中存在无法解析的 Stage 标题: {stage_text!r}")
             idx += 2
             continue
         body = sections[idx + 1]
@@ -184,7 +185,7 @@ def classify_signal(name: str, desc: str, stage_id: int | None) -> tuple[str, st
     if contains_any(text, ["浮选机", "渣浆泵", "螺杆泵", "化工泵", "鼓风机", "搅拌槽"]) and contains_any(text, ["电流", "频率反馈"]) and stage_id in {5, 6}:
         return "support_equipment_load", "设备电流/频率更多反映机组负荷，降维时优先让位于流量、液位、泡沫和药剂量。", False
 
-    # 此处依赖 normalize_text() 先将 NaN / "nan" / 空白统一归一为空字符串。
+    # build_analysis() 会先对 Description_CN 调用 normalize_text()，因此此处空字符串即代表缺失描述。
     if desc == "":
         return "unidentified_signal", "缺少中文描述且无法从命名稳定识别工艺语义，保守删除。", False
 
@@ -313,6 +314,11 @@ def main() -> None:
 
     df_parquet = pd.read_parquet(input_parquet)
     candidate_vars = analysis.loc[analysis[keep_col] == "keep", "Variable_Name"].tolist()
+    missing_vars = [v for v in candidate_vars if v not in df_parquet.columns]
+    if missing_vars:
+        preview = ", ".join(missing_vars[:10])
+        suffix = " ..." if len(missing_vars) > 10 else ""
+        print(f"[warn] {len(missing_vars)} 个保留变量未出现在输入 parquet 中：{preview}{suffix}")
     selected_vars = [v for v in candidate_vars if v in df_parquet.columns]
     target_cols = [c for c in df_parquet.columns if c.lower().startswith("y_")]
     reduced_cols = selected_vars + [c for c in target_cols if c not in selected_vars]
