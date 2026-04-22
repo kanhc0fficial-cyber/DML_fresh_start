@@ -238,11 +238,11 @@ def load_dag_roles(csv_path: str) -> dict:
 
 
 def build_safe_x_with_dag(op: str, df: pd.DataFrame, states: list,
-                           dag_roles: dict) -> list:
+                           dag_roles: dict) -> tuple:
     """构建控制变量集 safe_x，整合 DAG 因果角色过滤（与 v3/v4 完全一致）。"""
-    candidate_x = get_safe_x(op, df, states)
+    candidate_x, best_t_lag = get_safe_x(op, df, states)
     if not dag_roles or op not in dag_roles:
-        return candidate_x
+        return candidate_x, best_t_lag
     roles = dag_roles[op]
     excluded_details = {"instrument": [], "collider": [], "mediator": []}
     filtered_x = []
@@ -260,7 +260,7 @@ def build_safe_x_with_dag(op: str, df: pd.DataFrame, states: list,
         parts = [f"{r}={len(v)}" for r, v in excluded_details.items() if v]
         print(f"  [DAG过滤] {op}: 剔除 {n_excluded} 个变量 ({', '.join(parts)})，"
               f"保留 {len(filtered_x)} 个控制变量")
-    return filtered_x
+    return filtered_x, best_t_lag
 
 
 def _safe_abs_corr(a: np.ndarray, b: np.ndarray) -> float:
@@ -292,9 +292,9 @@ def refine_safe_x(op: str, df: pd.DataFrame, safe_x: list,
     return [var for _, _, _, var in scored[:max_controls]]
 
 
-def prepare_safe_x(op: str, df: pd.DataFrame, states: list, dag_roles: dict) -> list:
-    safe_x = build_safe_x_with_dag(op, df, states, dag_roles)
-    return refine_safe_x(op, df, safe_x)
+def prepare_safe_x(op: str, df: pd.DataFrame, states: list, dag_roles: dict) -> tuple:
+    safe_x, d_lag = build_safe_x_with_dag(op, df, states, dag_roles)
+    return refine_safe_x(op, df, safe_x), d_lag
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -882,6 +882,7 @@ def _compute_uncertainty_weights(
 # ═══════════════════════════════════════════════════════════════════
 
 def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
+                 d_lag: int = 1,
                  override_D=None, n_bootstrap: int = N_BOOTSTRAP,
                  window_type: str = "expanding",
                  fold_jitter_ratio: float = FOLD_JITTER_RATIO,
@@ -933,14 +934,14 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
 
     # ── 滑动窗口序列 ────────────────────────────────────────────────
     seqs_X, tgt_Y, tgt_D = [], [], []
-    for i in range(len(X_mat) - SEQ_LEN):
+    for i in range(len(X_mat) - SEQ_LEN - d_lag):
         seqs_X.append(X_mat[i: i + SEQ_LEN])
-        tgt_Y.append(Y_mat[i + SEQ_LEN])
         tgt_D.append(D_mat[i + SEQ_LEN])
+        tgt_Y.append(Y_mat[i + SEQ_LEN + d_lag])
     seqs_X = np.array(seqs_X, dtype=np.float32)
     tgt_Y  = np.array(tgt_Y,  dtype=np.float32)
     tgt_D  = np.array(tgt_D,  dtype=np.float32)
-    D_raw_seq = D_raw[SEQ_LEN:]
+    D_raw_seq = D_raw[SEQ_LEN:SEQ_LEN + len(seqs_X)]
 
     N          = len(seqs_X)
     block_size = N // K_FOLDS
@@ -1147,7 +1148,7 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
 # ═══════════════════════════════════════════════════════════════════
 #  辅助：构建 safe_x（与 v3/v4 完全一致）
 # ═══════════════════════════════════════════════════════════════════
-def get_safe_x(op: str, df: pd.DataFrame, states: list) -> list:
+def get_safe_x(op: str, df: pd.DataFrame, states: list) -> tuple:
     y_vals = df["Y_grade"].values
     x_vals = df[op].values
     best_t_r, best_t_lag = 0.0, 0
@@ -1166,7 +1167,7 @@ def get_safe_x(op: str, df: pd.DataFrame, states: list) -> list:
                 best_s_r, best_s_l = r, lag
         if best_s_r > 0.05 and best_s_l >= best_t_lag:
             safe_x.append(st)
-    return safe_x
+    return safe_x, max(best_t_lag, 1)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1249,12 +1250,12 @@ def _worker_placebo(task: dict) -> dict:
     key          = task["_key"]
     if df[op].std() < 0.1:
         return {"_key": key, "_filtered": True, "_reason": "std<0.1"}
-    safe_x = prepare_safe_x(op, df, states, dag_roles)
+    safe_x, d_lag = prepare_safe_x(op, df, states, dag_roles)
     if len(safe_x) < 2:
         return {"_key": key, "_filtered": True, "_reason": "safe_x不足(DAG过滤后)"}
     rng       = np.random.default_rng(seed=perm_idx * 42 + _op_seed(op))
     D_placebo = rng.permutation(df[op].values.copy())
-    result    = train_one_op(op, df, safe_x, override_D=D_placebo,
+    result    = train_one_op(op, df, safe_x, d_lag=d_lag, override_D=D_placebo,
                              **cf_cfg, **innov_cfg)
     if result is None:
         return {"_key": key, "_filtered": True, "_reason": "弱工具/样本不足"}
@@ -1276,6 +1277,7 @@ def _worker_random_confounder(task: dict) -> dict:
     theta_orig    = task["theta_orig"]
     SE_orig       = task["SE_orig"]
     safe_x_orig   = task["safe_x_orig"]
+    d_lag         = task.get("d_lag", 1)
     df, key       = task["df"], task["_key"]
     cf_cfg        = task.get("cf_cfg", {})
     innov_cfg     = task.get("innov_cfg", {})
@@ -1288,7 +1290,7 @@ def _worker_random_confounder(task: dict) -> dict:
         df_noisy[cname] = rng.standard_normal(len(df_noisy))
         noise_cols.append(cname)
     safe_x_noisy = safe_x_orig + noise_cols
-    result       = train_one_op(op, df_noisy, safe_x_noisy,
+    result       = train_one_op(op, df_noisy, safe_x_noisy, d_lag=d_lag,
                                 **cf_cfg, **innov_cfg)
     if result is None:
         return {"_key": key, "_filtered": True, "_reason": "弱工具/样本不足"}
@@ -1321,13 +1323,14 @@ def _worker_data_subset(task: dict) -> dict:
     op, sub_idx = task["op"], task["sub_idx"]
     start, end  = task["start"], task["end"]
     safe_x, df  = task["safe_x"], task["df"]
+    d_lag       = task.get("d_lag", 1)
     cf_cfg      = task.get("cf_cfg", {})
     innov_cfg   = task.get("innov_cfg", {})
     key         = task["_key"]
     df_sub = df.iloc[start:end].copy()
     if len(df_sub) < SEQ_LEN + K_FOLDS * MIN_TRAIN_SIZE:
         return {"_key": key, "_filtered": True, "_reason": "样本不足"}
-    result = train_one_op(op, df_sub, safe_x, **cf_cfg, **innov_cfg)
+    result = train_one_op(op, df_sub, safe_x, d_lag=d_lag, **cf_cfg, **innov_cfg)
     if result is None:
         return {"_key": key, "_filtered": True, "_reason": "弱工具/样本不足"}
     theta_med, p_val, SE, n, f, cv, sr = result
@@ -1448,10 +1451,10 @@ def run_stability_diagnosis(df, ops, states, workers=4, dag_roles: dict = None,
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = prepare_safe_x(op, df, states_list, dag_roles)
+        safe_x, d_lag = prepare_safe_x(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
-        result = train_one_op(op, df, safe_x, **cf_cfg, **innov_cfg)
+        result = train_one_op(op, df, safe_x, d_lag=d_lag, **cf_cfg, **innov_cfg)
         if result is None:
             print(f"  [跳过] {op:<30s}  估计失败（弱工具/样本不足）")
             continue
@@ -1550,24 +1553,24 @@ def run_random_confounder(df, ops, states, n_confounders=5, n_repeats=1,
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = prepare_safe_x(op, df, states_list, dag_roles)
+        safe_x, d_lag = prepare_safe_x(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
-        result = train_one_op(op, df, safe_x, **cf_cfg, **innov_cfg)
+        result = train_one_op(op, df, safe_x, d_lag=d_lag, **cf_cfg, **innov_cfg)
         if result is None:
             print(f"  [跳过] {op:<30s}  原始估计失败"); continue
         theta_med, p_val, SE, n, f, cv, sr = result
         if p_val > 0.05 and cv > CV_WARN:
             print(f"  [跳过] {op:<30s}  不显著且不稳定 (p={p_val:.3f}, CV={cv:.3f})"); continue
-        orig_thetas[op] = (theta_med, SE, safe_x)
+        orig_thetas[op] = (theta_med, SE, safe_x, d_lag)
         flag = "⚠ 不稳定" if cv > CV_WARN else "✓"
         print(f"  {op:<30s}  θ={theta_med:+.5f}  SE={SE:.5f}  CV={cv:.3f}  {flag}")
     tasks = []
-    for op, (theta_orig, SE_orig, safe_x_orig) in orig_thetas.items():
+    for op, (theta_orig, SE_orig, safe_x_orig, d_lag) in orig_thetas.items():
         for rep in range(n_repeats):
             tasks.append({"_key": f"{op}__rep{rep}", "op": op, "rep": rep,
                           "n_confounders": n_confounders, "theta_orig": theta_orig,
-                          "SE_orig": SE_orig, "safe_x_orig": safe_x_orig,
+                          "SE_orig": SE_orig, "safe_x_orig": safe_x_orig, "d_lag": d_lag,
                           "df": df, "cf_cfg": cf_cfg, "innov_cfg": innov_cfg})
     _run_parallel(tasks, _worker_random_confounder, ckpt_path, workers, desc="随机混杂")
     recs   = [r for r in _read_all_records(ckpt_path) if not r.get("_filtered")]
@@ -1607,14 +1610,14 @@ def run_data_subset(df, ops, states, n_subsets=8, subset_frac=0.8,
     for op in sorted(ops):
         if df[op].std() < 0.1:
             continue
-        safe_x = prepare_safe_x(op, df, states_list, dag_roles)
+        safe_x, d_lag = prepare_safe_x(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             continue
         for sub_idx in range(n_subsets):
             start = min(sub_idx * step, T - subset_len); end = start + subset_len
             tasks.append({"_key": f"{op}__sub{sub_idx}", "op": op, "sub_idx": sub_idx,
-                          "start": start, "end": end, "safe_x": safe_x, "df": df,
-                          "cf_cfg": cf_cfg, "innov_cfg": innov_cfg})
+                          "start": start, "end": end, "safe_x": safe_x, "d_lag": d_lag,
+                          "df": df, "cf_cfg": cf_cfg, "innov_cfg": innov_cfg})
     _run_parallel(tasks, _worker_data_subset, ckpt_path, workers, desc="数据子集")
     recs   = [r for r in _read_all_records(ckpt_path) if not r.get("_filtered")]
     df_out = pd.DataFrame([{k: v for k, v in r.items() if not k.startswith("_")} for r in recs])
@@ -1709,7 +1712,7 @@ def run_ablation(df, ops, states, dag_roles: dict = None, n_ops: int = 5):
     rows = []
 
     for op in candidate_ops:
-        safe_x = prepare_safe_x(op, df, states_list, dag_roles)
+        safe_x, d_lag = prepare_safe_x(op, df, states_list, dag_roles)
         if len(safe_x) < 2:
             print(f"  [跳过] {op}  safe_x 不足")
             continue
@@ -1717,7 +1720,7 @@ def run_ablation(df, ops, states, dag_roles: dict = None, n_ops: int = 5):
 
         for config_name, cfg in ablation_configs.items():
             t0     = time.perf_counter()
-            result = train_one_op(op, df, safe_x, **cfg)
+            result = train_one_op(op, df, safe_x, d_lag=d_lag, **cfg)
             elapsed = time.perf_counter() - t0
 
             if result is None:
