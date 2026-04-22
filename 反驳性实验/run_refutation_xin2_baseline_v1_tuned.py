@@ -359,13 +359,14 @@ def train_one_op(op: str, df: pd.DataFrame, safe_x: list,
     D_norm = (D_raw - D_mean) / D_std
 
     # ── 滞后特征展平 ──────────────────────────────────────────────
-    # X_lag[i] = flatten(X_norm[i : i+SEQ_LEN])，对应 D[i+SEQ_LEN]，Y[i+SEQ_LEN+d_lag]
+    # Alignment: X_lag[i] ← X[i:i+SEQ_LEN], D_vec[i] ← D[i+SEQ_LEN], Y_vec[i] ← Y[i+SEQ_LEN+d_lag]
+    # Y_vec is shortest (length T-SEQ_LEN-d_lag); X_lag and D_vec are truncated to match.
     X_lag  = _build_lag_features(X_norm, SEQ_LEN)   # (T-SEQ_LEN, SEQ_LEN*d)
-    D_vec  = D_norm[SEQ_LEN:]                        # D at time t
-    Y_vec  = Y_norm[SEQ_LEN + d_lag:]               # Y at time t+d_lag
-    N      = len(Y_vec)                              # T-SEQ_LEN-d_lag
-    X_lag  = X_lag[:N]
-    D_vec  = D_vec[:N]
+    D_vec  = D_norm[SEQ_LEN:]                        # D at time t   (length T-SEQ_LEN)
+    Y_vec  = Y_norm[SEQ_LEN + d_lag:]               # Y at time t+d_lag (length T-SEQ_LEN-d_lag)
+    N      = len(Y_vec)                              # T-SEQ_LEN-d_lag; d_lag>=1 so N < len(X_lag)
+    X_lag  = X_lag[:N]                               # align to Y_vec length
+    D_vec  = D_vec[:N]                               # align to Y_vec length
     block_size = N // K_FOLDS
 
     op_base_seed = _op_seed(op)
