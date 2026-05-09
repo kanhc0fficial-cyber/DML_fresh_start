@@ -374,6 +374,7 @@ def run_bilstm(X_train_raw, X_test_raw, y_train, y_test, seq_len: int = LSTM_SEQ
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=10, min_lr=1e-5
     )
+    # Huber 损失对品位异常值更稳健（delta=1.0 在均方误差和平均绝对误差之间平衡）
     criterion = nn.HuberLoss(delta=1.0)
 
     best_val_loss = float("inf")
@@ -479,7 +480,7 @@ def plot_scatter(outlet_key: str, y_test: np.ndarray, preds: dict, label: str):
     ncols = 3
     nrows = (n_models + ncols - 1) // ncols
     fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows))
-    axes_flat = axes.flatten() if nrows > 1 else axes.flatten()
+    axes_flat = axes.flatten()
     fig.suptitle(f"{label} — 散点图（预测 vs 真实）", fontsize=13)
 
     for ax, (name, pred) in zip(axes_flat, preds.items()):
@@ -574,9 +575,10 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     ptr, pte, y_tr_seq, y_te_seq = run_bilstm(
         X_train_raw, X_test_raw, y_train, y_test, seq_len=LSTM_SEQ_LEN
     )
-    # 对齐：前 seq_len-1 个位置无预测，跳过
+    # 对齐：前 seq_len-1 个位置无预测（NaN 填充），跳过这些位置
     pad = LSTM_SEQ_LEN - 1
-    m_tr = compute_metrics(y_train[pad:], ptr[pad:][~np.isnan(ptr[pad:])])
+    valid_tr = ~np.isnan(ptr[pad:])
+    m_tr = compute_metrics(y_train[pad:][valid_tr], ptr[pad:][valid_tr])
     # test: y_test 与 pte 长度一致
     valid = ~np.isnan(pte)
     m_te  = compute_metrics(y_test[valid], pte[valid])
@@ -615,7 +617,7 @@ def main():
 
     # 保存完整结果（含训练集）
     csv_path = os.path.join(RESULT_DIR, "metrics_summary.csv")
-    summary.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    summary.to_csv(csv_path, index=False, encoding="utf-8")
     print(f"\n  完整指标已保存：{csv_path}")
 
 
