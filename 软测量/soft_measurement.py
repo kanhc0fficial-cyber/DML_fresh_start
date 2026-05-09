@@ -225,14 +225,13 @@ def load_and_prepare(outlet_key: str):
     X_te_vt = vt.transform(X_test_raw)
     print(f"  方差阈值后：{X_tr_vt.shape[1]} 个特征")
 
-    # 3b. 处理 NaN（ffill + 列均值填充，均值取自训练集）
-    X_tr_df   = pd.DataFrame(X_tr_vt).ffill().bfill()
-    X_va_df   = pd.DataFrame(X_va_vt).ffill().bfill()
-    X_te_df   = pd.DataFrame(X_te_vt).ffill().bfill()
+    # 3b. 处理 NaN（仅 ffill，再用训练集列均值补全剩余缺失）
+    # 训练集：ffill 后用自身均值填充；验证/测试集：ffill 后用训练集均值填充，避免 bfill 引入未来信息
+    X_tr_df   = pd.DataFrame(X_tr_vt).ffill()
     col_means = X_tr_df.mean()
     X_tr_vt   = X_tr_df.fillna(col_means).values
-    X_va_vt   = X_va_df.fillna(col_means).values
-    X_te_vt   = X_te_df.fillna(col_means).values
+    X_va_vt   = pd.DataFrame(X_va_vt).ffill().fillna(col_means).values
+    X_te_vt   = pd.DataFrame(X_te_vt).ffill().fillna(col_means).values
 
     # 3c. 互信息选 Top-K（仅在训练集上拟合）
     k = min(K_FEATURES, X_tr_vt.shape[1])
@@ -615,8 +614,8 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     )
     # 对齐：前 seq_len-1 个位置无预测（NaN 填充），跳过这些位置
     pad = LSTM_SEQ_LEN - 1
-    valid_tr = ~np.isnan(ptr[pad:])
-    m_tr = compute_metrics(y_train[pad:][valid_tr], ptr[pad:][valid_tr])
+    valid_tr_full = np.concatenate([np.zeros(pad, dtype=bool), ~np.isnan(ptr[pad:])])
+    m_tr = compute_metrics(y_train[valid_tr_full], ptr[valid_tr_full])
     valid_te = ~np.isnan(pte)
     m_te = compute_metrics(y_test[valid_te], pte[valid_te])
     records.append({"模型": "LSTM",
