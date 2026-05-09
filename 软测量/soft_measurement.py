@@ -12,7 +12,7 @@
   3. GPR         — 高斯过程回归（为控制计算量对训练集子采样）
   4. XGBoost     — 极端梯度提升（引入二阶导数和正则化项）
   5. LightGBM    — 基于直方图和叶子生长策略的高效梯度提升树
-  6. Bi-LSTM     — 双向长短期记忆网络（结合历史与未来信息）
+  6. LSTM        — 单向长短期记忆网络（因果时序，适用于在线软测量）
 
 数据来源：
   data/modeling_dataset_xin1_final.parquet  — 新一线特征 + 品位目标
@@ -72,15 +72,16 @@ DS_XIN2 = os.path.join(DATA_DIR, "modeling_dataset_xin2_final.parquet")
 #  全局超参数
 # ═══════════════════════════════════════════════════════════════════════════
 K_FEATURES       = 50    # SelectKBest 按互信息保留的特征数（供所有模型使用）
-TEST_RATIO       = 0.20  # 测试集比例（时序分割，不打乱顺序）
+VAL_RATIO        = 0.10  # 验证集比例（从训练集末尾切出，用于 early stopping）
+TEST_RATIO       = 0.20  # 测试集比例（时序分割，不打乱顺序，最终评估专用）
 RANDOM_SEED      = 42
 
 # GPR
 GPR_MAX_SAMPLES  = 300   # GPR 训练样本上限（控制 O(n³) 计算量）
 
-# Bi-LSTM
+# LSTM
 LSTM_SEQ_LEN     = 8     # 输入窗口长度（个时间步）
-LSTM_HIDDEN      = 64    # 双向 LSTM 隐藏维度（单向）
+LSTM_HIDDEN      = 64    # LSTM 隐藏维度
 LSTM_LAYERS      = 2     # LSTM 堆叠层数
 LSTM_DROPOUT     = 0.2   # Dropout 比例
 LSTM_EPOCHS      = 150   # 最大训练轮次
@@ -95,14 +96,17 @@ OUTLET_CFG = {
     "xin2": {"dataset": DS_XIN2, "y_col": "y_fx_xin2", "label": "新二线精矿品位"},
 }
 
-MODEL_NAMES = ["ElasticNet", "SVR", "GPR", "XGBoost", "LightGBM", "Bi-LSTM"]
+MODEL_NAMES = ["ElasticNet", "SVR", "GPR", "XGBoost", "LightGBM", "LSTM"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  Bi-LSTM 模型定义
+#  LSTM 模型定义（单向，适用于因果时序软测量）
 # ═══════════════════════════════════════════════════════════════════════════
-class BiLSTMRegressor(nn.Module):
-    """双向 LSTM 回归网络：seq_len × n_features → 1 标量"""
+class LSTMRegressor(nn.Module):
+    """单向 LSTM 回归网络：seq_len × n_features → 1 标量
+
+    单向设计确保 t 时刻预测仅依赖 t 及之前的信息，符合在线软测量的因果性要求。
+    """
 
     def __init__(self, n_features: int, hidden: int = 64, n_layers: int = 2,
                  dropout: float = 0.2):
@@ -112,15 +116,15 @@ class BiLSTMRegressor(nn.Module):
             hidden_size=hidden,
             num_layers=n_layers,
             batch_first=True,
-            bidirectional=True,
+            bidirectional=False,
             dropout=dropout if n_layers > 1 else 0.0,
         )
         self.drop = nn.Dropout(dropout)
-        self.head = nn.Linear(hidden * 2, 1)   # ×2 因为双向
+        self.head = nn.Linear(hidden, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, seq_len, n_features)
-        out, _ = self.lstm(x)          # out: (B, seq_len, 2*hidden)
+        out, _ = self.lstm(x)          # out: (B, seq_len, hidden)
         last    = out[:, -1, :]        # 取最后一个时间步
         return self.head(self.drop(last)).squeeze(-1)
 
@@ -157,17 +161,19 @@ def make_sequences(X: np.ndarray, y: np.ndarray,
     return np.array(xs, dtype=np.float32), np.array(ys, dtype=np.float32)
 
 
-def load_and_prepare(outlet_key: str) -> tuple[np.ndarray, np.ndarray,
-                                                np.ndarray, np.ndarray,
-                                                np.ndarray, np.ndarray,
-                                                pd.DatetimeIndex]:
-    """加载数据、特征选择、时序分割、标准化。
+def load_and_prepare(outlet_key: str):
+    """加载数据、特征选择、时序三段分割（train/val/test）、标准化。
+
+    数据切分顺序（按时间）：
+      train : [0,  n_train)        — 占总量约 70%，用于拟合模型
+      val   : [n_train, n_val_end) — 占总量约 10%，用于 early stopping / 超参选择
+      test  : [n_val_end, end)     — 占总量约 20%，仅用于最终评估，不参与任何训练决策
 
     Returns:
-        X_train_s, X_test_s: 标准化后特征（2D）
-        y_train, y_test: 目标值
-        X_raw_train, X_raw_test: 未标准化特征（供 Bi-LSTM 序列构建）
-        test_index: 测试集时间戳索引
+        X_train_s, X_val_s, X_test_s : 标准化后特征（2D）
+        y_train, y_val, y_test       : 目标值
+        X_train_raw, X_val_raw, X_test_raw : 未标准化特征（供 LSTM 序列构建）
+        val_index, test_index        : 时间戳索引
     """
     cfg   = OUTLET_CFG[outlet_key]
     y_col = cfg["y_col"]
@@ -193,45 +199,59 @@ def load_and_prepare(outlet_key: str) -> tuple[np.ndarray, np.ndarray,
 
     print(f"  原始特征维度：{X_raw.shape[1]}，样本数：{len(X_raw)}")
 
-    # ── 2. 时序分割（不打乱） ────────────────────────────────────
-    n_total = len(X_raw)
-    n_train = int(n_total * (1 - TEST_RATIO))
-    X_train_raw, X_test_raw = X_raw[:n_train],   X_raw[n_train:]
-    y_train,     y_test     = target[:n_train],  target[n_train:]
-    test_index              = df.index[n_train:]
+    # ── 2. 时序三段分割（train / val / test，不打乱） ────────────
+    n_total   = len(X_raw)
+    n_test    = int(n_total * TEST_RATIO)
+    n_val     = int(n_total * VAL_RATIO)
+    n_train   = n_total - n_val - n_test
+    n_val_end = n_train + n_val
 
-    print(f"  训练集：{n_train} 条  |  测试集：{n_total - n_train} 条")
+    X_train_raw = X_raw[:n_train]
+    X_val_raw   = X_raw[n_train:n_val_end]
+    X_test_raw  = X_raw[n_val_end:]
+    y_train     = target[:n_train]
+    y_val       = target[n_train:n_val_end]
+    y_test      = target[n_val_end:]
+    val_index   = df.index[n_train:n_val_end]
+    test_index  = df.index[n_val_end:]
+
+    print(f"  训练集：{n_train} 条  |  验证集：{n_val} 条  |  测试集：{n_test} 条")
 
     # ── 3. 特征选择（仅在训练集上拟合） ─────────────────────────
     # 3a. 去方差极小特征
     vt = VarianceThreshold(threshold=1e-4)
     X_tr_vt = vt.fit_transform(X_train_raw)
+    X_va_vt = vt.transform(X_val_raw)
     X_te_vt = vt.transform(X_test_raw)
     print(f"  方差阈值后：{X_tr_vt.shape[1]} 个特征")
 
-    # 3b. 处理训练集中的 NaN（ffill + 列均值填充）
-    X_tr_df = pd.DataFrame(X_tr_vt).ffill().bfill()
-    X_te_df = pd.DataFrame(X_te_vt).ffill().bfill()
-    # 如果还有 NaN，用训练集均值填充
+    # 3b. 处理 NaN（ffill + 列均值填充，均值取自训练集）
+    X_tr_df   = pd.DataFrame(X_tr_vt).ffill().bfill()
+    X_va_df   = pd.DataFrame(X_va_vt).ffill().bfill()
+    X_te_df   = pd.DataFrame(X_te_vt).ffill().bfill()
     col_means = X_tr_df.mean()
-    X_tr_df   = X_tr_df.fillna(col_means)
-    X_te_df   = X_te_df.fillna(col_means)
-    X_tr_vt   = X_tr_df.values
-    X_te_vt   = X_te_df.values
+    X_tr_vt   = X_tr_df.fillna(col_means).values
+    X_va_vt   = X_va_df.fillna(col_means).values
+    X_te_vt   = X_te_df.fillna(col_means).values
 
-    # 3c. 互信息选 Top-K
+    # 3c. 互信息选 Top-K（仅在训练集上拟合）
     k = min(K_FEATURES, X_tr_vt.shape[1])
-    selector = SelectKBest(mutual_info_regression, k=k)
-    X_tr_sel = selector.fit_transform(X_tr_vt, y_train)
-    X_te_sel = selector.transform(X_te_vt)
+    selector  = SelectKBest(mutual_info_regression, k=k)
+    X_tr_sel  = selector.fit_transform(X_tr_vt, y_train)
+    X_va_sel  = selector.transform(X_va_vt)
+    X_te_sel  = selector.transform(X_te_vt)
     print(f"  互信息选特征后：{X_tr_sel.shape[1]} 个特征")
 
-    # ── 4. 标准化 ────────────────────────────────────────────────
-    scaler   = StandardScaler()
+    # ── 4. 标准化（仅在训练集上拟合） ───────────────────────────
+    scaler    = StandardScaler()
     X_train_s = scaler.fit_transform(X_tr_sel)
+    X_val_s   = scaler.transform(X_va_sel)
     X_test_s  = scaler.transform(X_te_sel)
 
-    return X_train_s, X_test_s, y_train, y_test, X_tr_sel, X_te_sel, test_index
+    return (X_train_s, X_val_s, X_test_s,
+            y_train, y_val, y_test,
+            X_tr_sel, X_va_sel, X_te_sel,
+            val_index, test_index)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -264,13 +284,14 @@ def run_svr(X_train, X_test, y_train, y_test):
 
 
 def run_gpr(X_train, X_test, y_train, y_test):
-    """GPR 对训练集子采样以控制 O(n³) 复杂度。"""
+    """GPR 对训练集取最近连续 N 条以控制 O(n³) 复杂度。
+
+    使用末尾连续窗口（而非随机抽样）以保留时序局部结构。
+    """
     t0 = time.time()
-    rng = np.random.RandomState(RANDOM_SEED)
     if len(X_train) > GPR_MAX_SAMPLES:
-        idx = rng.choice(len(X_train), GPR_MAX_SAMPLES, replace=False)
-        idx.sort()
-        X_tr_gpr, y_tr_gpr = X_train[idx], y_train[idx]
+        X_tr_gpr = X_train[-GPR_MAX_SAMPLES:]
+        y_tr_gpr = y_train[-GPR_MAX_SAMPLES:]
     else:
         X_tr_gpr, y_tr_gpr = X_train, y_train
 
@@ -288,7 +309,8 @@ def run_gpr(X_train, X_test, y_train, y_test):
     return pred_train, pred_test
 
 
-def run_xgboost(X_train, X_test, y_train, y_test):
+def run_xgboost(X_train, X_val, X_test, y_train, y_val, y_test):
+    """XGBoost：使用独立验证集做 early stopping，测试集仅用于最终评估。"""
     t0 = time.time()
     model = xgb.XGBRegressor(
         n_estimators=500, learning_rate=0.05, max_depth=5,
@@ -301,7 +323,7 @@ def run_xgboost(X_train, X_test, y_train, y_test):
     )
     model.fit(
         X_train, y_train,
-        eval_set=[(X_test, y_test)],
+        eval_set=[(X_val, y_val)],   # 验证集做 early stopping，不使用测试集
         verbose=False,
     )
     pred_train = model.predict(X_train)
@@ -311,7 +333,8 @@ def run_xgboost(X_train, X_test, y_train, y_test):
     return pred_train, pred_test
 
 
-def run_lightgbm(X_train, X_test, y_train, y_test):
+def run_lightgbm(X_train, X_val, X_test, y_train, y_val, y_test):
+    """LightGBM：使用独立验证集做 early stopping，测试集仅用于最终评估。"""
     t0 = time.time()
     model = lgb.LGBMRegressor(
         n_estimators=500, learning_rate=0.05, max_depth=6,
@@ -321,7 +344,7 @@ def run_lightgbm(X_train, X_test, y_train, y_test):
     )
     model.fit(
         X_train, y_train,
-        eval_set=[(X_test, y_test)],
+        eval_set=[(X_val, y_val)],   # 验证集做 early stopping，不使用测试集
         callbacks=[lgb.early_stopping(30, verbose=False), lgb.log_evaluation(-1)],
     )
     pred_train = model.predict(X_train)
@@ -331,46 +354,57 @@ def run_lightgbm(X_train, X_test, y_train, y_test):
     return pred_train, pred_test
 
 
-def run_bilstm(X_train_raw, X_test_raw, y_train, y_test, seq_len: int = LSTM_SEQ_LEN):
-    """使用未标准化特征构建滑动窗口序列，内部做序列级 StandardScaler。"""
+def run_lstm(X_train_raw, X_val_raw, X_test_raw,
+             y_train, y_val, y_test,
+             seq_len: int = LSTM_SEQ_LEN):
+    """单向 LSTM：使用独立验证集做 early stopping 和 LR 调度，测试集仅用于最终评估。
+
+    标准化、窗口构建均仅在训练集上拟合，然后分别 transform 验证集与测试集。
+    """
     t0 = time.time()
 
-    # ── 序列级标准化（逐特征） ──────────────────────────────────
+    # ── 序列级标准化（逐特征，仅训练集拟合） ────────────────────
     scaler = StandardScaler()
     X_tr_s = scaler.fit_transform(X_train_raw)
+    X_va_s = scaler.transform(X_val_raw)
     X_te_s = scaler.transform(X_test_raw)
 
     # ── 构建滑动窗口 ─────────────────────────────────────────────
     X_tr_seq, y_tr_seq = make_sequences(X_tr_s, y_train, seq_len)
+    X_va_seq, y_va_seq = make_sequences(X_va_s, y_val,   seq_len)
     X_te_seq, y_te_seq = make_sequences(X_te_s, y_test,  seq_len)
 
     n_features = X_tr_seq.shape[2]
 
-    # ── 目标值归一化（方便训练稳定） ─────────────────────────────
+    # ── 目标值归一化（仅训练集统计量） ──────────────────────────
     y_mean, y_std = y_tr_seq.mean(), y_tr_seq.std() + 1e-8
     y_tr_norm = (y_tr_seq - y_mean) / y_std
-    y_te_norm = (y_te_seq - y_mean) / y_std   # 用训练集统计量
+    y_va_norm = (y_va_seq - y_mean) / y_std
+    y_te_norm = (y_te_seq - y_mean) / y_std
 
     # ── DataLoader ───────────────────────────────────────────────
-    ds_train = TensorDataset(
-        torch.from_numpy(X_tr_seq),
-        torch.from_numpy(y_tr_norm),
+    dl_train = DataLoader(
+        TensorDataset(torch.from_numpy(X_tr_seq), torch.from_numpy(y_tr_norm)),
+        batch_size=LSTM_BATCH, shuffle=True, drop_last=False,
     )
-    ds_test = TensorDataset(
-        torch.from_numpy(X_te_seq),
-        torch.from_numpy(y_te_norm),
+    dl_val = DataLoader(
+        TensorDataset(torch.from_numpy(X_va_seq), torch.from_numpy(y_va_norm)),
+        batch_size=LSTM_BATCH, shuffle=False, drop_last=False,
     )
-    dl_train = DataLoader(ds_train, batch_size=LSTM_BATCH, shuffle=True,  drop_last=False)
-    dl_test  = DataLoader(ds_test,  batch_size=LSTM_BATCH, shuffle=False, drop_last=False)
+    dl_test = DataLoader(
+        TensorDataset(torch.from_numpy(X_te_seq), torch.from_numpy(y_te_norm)),
+        batch_size=LSTM_BATCH, shuffle=False, drop_last=False,
+    )
 
     # ── 模型 ─────────────────────────────────────────────────────
-    model = BiLSTMRegressor(
+    model = LSTMRegressor(
         n_features=n_features,
         hidden=LSTM_HIDDEN,
         n_layers=LSTM_LAYERS,
         dropout=LSTM_DROPOUT,
     ).to(DEVICE)
     optimizer = torch.optim.Adam(model.parameters(), lr=LSTM_LR, weight_decay=1e-4)
+    # LR 调度依赖验证集损失
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=10, min_lr=1e-5
     )
@@ -392,15 +426,15 @@ def run_bilstm(X_train_raw, X_test_raw, y_train, y_test, seq_len: int = LSTM_SEQ
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
 
-        # Validate
+        # Validate on val set only (test set not touched)
         model.eval()
         val_losses = []
         with torch.no_grad():
-            for xb, yb in dl_test:
+            for xb, yb in dl_val:
                 xb, yb = xb.to(DEVICE), yb.to(DEVICE)
                 val_losses.append(criterion(model(xb), yb).item())
         val_loss = np.mean(val_losses)
-        scheduler.step(val_loss)
+        scheduler.step(val_loss)   # LR 调度依赖验证集损失
 
         if val_loss < best_val_loss - 1e-5:
             best_val_loss = val_loss
@@ -412,7 +446,7 @@ def run_bilstm(X_train_raw, X_test_raw, y_train, y_test, seq_len: int = LSTM_SEQ
                 print(f"    早停于 epoch {epoch}（patience={LSTM_PATIENCE}）")
                 break
 
-    # ── 预测 ─────────────────────────────────────────────────────
+    # ── 预测（加载最佳检查点） ───────────────────────────────────
     if best_state is not None:
         model.load_state_dict(best_state)
     model.eval()
@@ -432,14 +466,14 @@ def run_bilstm(X_train_raw, X_test_raw, y_train, y_test, seq_len: int = LSTM_SEQ
     pred_test_full  = pred_te_norm * y_std + y_mean
 
     elapsed = time.time() - t0
-    print(f"  [Bi-LSTM]    最终验证损失={best_val_loss:.5f}  耗时={elapsed:.1f}s")
+    print(f"  [LSTM]       最终验证损失={best_val_loss:.5f}  耗时={elapsed:.1f}s")
 
     # 对齐回完整序列长度（前 seq_len-1 个样本无预测，用 NaN 填充）
     pad = seq_len - 1
     pred_train_aligned = np.concatenate([np.full(pad, np.nan), pred_train_full])
     pred_test_aligned  = np.concatenate([np.full(pad, np.nan), pred_test_full])
 
-    return pred_train_aligned, pred_test_aligned, y_tr_seq, y_te_seq
+    return pred_train_aligned, pred_test_aligned
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -515,10 +549,12 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     """对单个出矿口运行全部 6 个模型，返回评估指标 DataFrame。"""
     cfg = OUTLET_CFG[outlet_key]
 
-    (X_train_s, X_test_s, y_train, y_test,
-     X_train_raw, X_test_raw, test_index) = load_and_prepare(outlet_key)
+    (X_train_s, X_val_s, X_test_s,
+     y_train, y_val, y_test,
+     X_train_raw, X_val_raw, X_test_raw,
+     val_index, test_index) = load_and_prepare(outlet_key)
 
-    records   = []
+    records    = []
     test_preds = {}   # 供可视化
 
     # ── 1. ElasticNet ──────────────────────────────────────────────
@@ -552,7 +588,7 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     print(f"    测试 R²={m_te['R2']:.4f}  RMSE={m_te['RMSE']:.4f}  MAE={m_te['MAE']:.4f}")
 
     # ── 4. XGBoost ─────────────────────────────────────────────────
-    ptr, pte = run_xgboost(X_train_s, X_test_s, y_train, y_test)
+    ptr, pte = run_xgboost(X_train_s, X_val_s, X_test_s, y_train, y_val, y_test)
     m_tr = compute_metrics(y_train, ptr)
     m_te = compute_metrics(y_test,  pte)
     records.append({"模型": "XGBoost",
@@ -562,7 +598,7 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     print(f"    测试 R²={m_te['R2']:.4f}  RMSE={m_te['RMSE']:.4f}  MAE={m_te['MAE']:.4f}")
 
     # ── 5. LightGBM ────────────────────────────────────────────────
-    ptr, pte = run_lightgbm(X_train_s, X_test_s, y_train, y_test)
+    ptr, pte = run_lightgbm(X_train_s, X_val_s, X_test_s, y_train, y_val, y_test)
     m_tr = compute_metrics(y_train, ptr)
     m_te = compute_metrics(y_test,  pte)
     records.append({"模型": "LightGBM",
@@ -571,21 +607,22 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     test_preds["LightGBM"] = pte
     print(f"    测试 R²={m_te['R2']:.4f}  RMSE={m_te['RMSE']:.4f}  MAE={m_te['MAE']:.4f}")
 
-    # ── 6. Bi-LSTM ─────────────────────────────────────────────────
-    ptr, pte, y_tr_seq, y_te_seq = run_bilstm(
-        X_train_raw, X_test_raw, y_train, y_test, seq_len=LSTM_SEQ_LEN
+    # ── 6. LSTM ────────────────────────────────────────────────────
+    ptr, pte = run_lstm(
+        X_train_raw, X_val_raw, X_test_raw,
+        y_train, y_val, y_test,
+        seq_len=LSTM_SEQ_LEN,
     )
     # 对齐：前 seq_len-1 个位置无预测（NaN 填充），跳过这些位置
     pad = LSTM_SEQ_LEN - 1
     valid_tr = ~np.isnan(ptr[pad:])
     m_tr = compute_metrics(y_train[pad:][valid_tr], ptr[pad:][valid_tr])
-    # test: y_test 与 pte 长度一致
-    valid = ~np.isnan(pte)
-    m_te  = compute_metrics(y_test[valid], pte[valid])
-    records.append({"模型": "Bi-LSTM",
+    valid_te = ~np.isnan(pte)
+    m_te = compute_metrics(y_test[valid_te], pte[valid_te])
+    records.append({"模型": "LSTM",
                     "训练R2": m_tr["R2"], "训练RMSE": m_tr["RMSE"], "训练MAE": m_tr["MAE"],
                     "测试R2":  m_te["R2"], "测试RMSE":  m_te["RMSE"], "测试MAE":  m_te["MAE"]})
-    test_preds["Bi-LSTM"] = pte
+    test_preds["LSTM"] = pte
     print(f"    测试 R²={m_te['R2']:.4f}  RMSE={m_te['RMSE']:.4f}  MAE={m_te['MAE']:.4f}")
 
     # ── 可视化 ─────────────────────────────────────────────────────
