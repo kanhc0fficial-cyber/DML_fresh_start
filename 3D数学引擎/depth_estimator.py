@@ -2,15 +2,20 @@
 深度估算器（Depth Estimator）包装层
 
 支持后端：
-  - "midas"          : MiDaS v3（DPT-Large），通过 torch.hub 加载
-  - "depth_anything" : Depth Anything v2（更轻量，效果优秀）
-  - "mock"           : 合成深度图，用于单元测试 / 无 GPU 环境
+  - "midas"              : MiDaS v3（DPT-Large），通过 torch.hub 加载
+  - "depth_anything_v2"  : Depth Anything V2（轻量，效果优秀）
+  - "depth_anything_v3"  : Depth Anything V3（最新，推荐首选）
+  - "mock"               : 合成深度图，用于单元测试 / 无 GPU 环境
+
+向下兼容别名：
+  - "depth_anything" → 等价于 "depth_anything_v2"
 
 公共接口：
     from depth_estimator import get_depth_map
 
-    depth_map = get_depth_map("image.jpg")          # 返回 np.ndarray  H×W (float32, 单位：米，归一化)
-    depth_map = get_depth_map("image.jpg", backend="mock", mock_depth=10.0)
+    depth_map = get_depth_map("image.jpg")                  # 返回 np.ndarray  H×W (float32, 近似米)
+    depth_map = get_depth_map("image.jpg", backend="depth_anything_v3")
+    depth_map = get_depth_map("image.jpg", backend="mock", mock_near_depth=5.0, mock_far_depth=20.0)
 """
 
 from __future__ import annotations
@@ -24,7 +29,12 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-BackendType = Literal["midas", "depth_anything", "mock"]
+BackendType = Literal["midas", "depth_anything_v2", "depth_anything_v3", "depth_anything", "mock"]
+
+# 向下兼容：旧名称 "depth_anything" → 自动映射为 "depth_anything_v2"
+_BACKEND_ALIASES: dict[str, str] = {
+    "depth_anything": "depth_anything_v2",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,9 +113,17 @@ class _MiDaSEstimator:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class _DepthAnythingEstimator:
-    """Depth Anything v2 封装（transformers 接口）。"""
+    """Depth Anything 封装（transformers HuggingFace pipeline 接口）。
 
-    def __init__(self, model_name: str = "depth-anything/Depth-Anything-V2-Small-hf",
+    同时支持 V2 和 V3，通过 model_name 参数区分。
+    """
+
+    # 默认模型 ID（可通过 backend_kwargs 中的 model_name 覆盖）
+    DEFAULT_V2_MODEL = "depth-anything/Depth-Anything-V2-Small-hf"
+    DEFAULT_V3_MODEL = "depth-anything/Depth-Anything-V3-Small-hf"
+
+    def __init__(self, model_name: Optional[str] = None,
+                 version: str = "v2",
                  device: Optional[str] = None):
         try:
             import torch
@@ -117,7 +135,11 @@ class _DepthAnythingEstimator:
             ) from e
 
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info("加载 Depth-Anything 模型 %s（设备: %s）…", model_name, self.device)
+
+        if model_name is None:
+            model_name = self.DEFAULT_V3_MODEL if version == "v3" else self.DEFAULT_V2_MODEL
+
+        logger.info("加载 Depth-Anything %s 模型 %s（设备: %s）…", version.upper(), model_name, self.device)
 
         self.pipe = hf_pipeline(
             task="depth-estimation",
@@ -177,7 +199,7 @@ _estimator_cache: dict[str, object] = {}
 
 def get_depth_map(
     image: str | Path | Image.Image,
-    backend: BackendType = "midas",
+    backend: BackendType = "depth_anything_v3",
     scale_factor: float = 10.0,
     device: Optional[str] = None,
     mock_near_depth: float = 5.0,
@@ -190,11 +212,13 @@ def get_depth_map(
     ----------
     image : str | Path | PIL.Image.Image
         输入图像。
-    backend : "midas" | "depth_anything" | "mock"
-        使用的深度估算后端。
-        - "midas"          : MiDaS DPT-Large（需要 torch + 联网下载权重）
-        - "depth_anything" : Depth-Anything V2（需要 transformers + torch）
-        - "mock"           : 不需要任何模型，用于测试
+    backend : str
+        使用的深度估算后端：
+        - "depth_anything_v3" : Depth Anything V3（推荐，需要 transformers + torch）
+        - "depth_anything_v2" : Depth Anything V2（需要 transformers + torch）
+        - "depth_anything"    : 同 "depth_anything_v2"（向下兼容别名）
+        - "midas"             : MiDaS DPT-Large（需要 torch，通过 torch.hub 加载）
+        - "mock"              : 不需要任何模型，用于测试
     scale_factor : float
         将相对深度缩放到大约多少米（默认 10.0）。
         如果拥有真实相机标定，请忽略此参数并对结果做绝对标定。
@@ -209,14 +233,28 @@ def get_depth_map(
     -------
     np.ndarray  shape (H, W)  float32
     """
+    # 处理向下兼容别名
+    backend = _BACKEND_ALIASES.get(backend, backend)  # type: ignore[arg-type]
+
     pil_image = _load_image(image)
 
-    cache_key = f"{backend}_{device}"
+    # mock 的 cache key 必须包含 near/far，否则不同参数共用同一个 Estimator
+    if backend == "mock":
+        cache_key = f"mock_{mock_near_depth}_{mock_far_depth}"
+    else:
+        cache_key = f"{backend}_{device}"
+
     if cache_key not in _estimator_cache:
         if backend == "midas":
             _estimator_cache[cache_key] = _MiDaSEstimator(device=device, **backend_kwargs)
-        elif backend == "depth_anything":
-            _estimator_cache[cache_key] = _DepthAnythingEstimator(device=device, **backend_kwargs)
+        elif backend == "depth_anything_v2":
+            _estimator_cache[cache_key] = _DepthAnythingEstimator(
+                version="v2", device=device, **backend_kwargs
+            )
+        elif backend == "depth_anything_v3":
+            _estimator_cache[cache_key] = _DepthAnythingEstimator(
+                version="v3", device=device, **backend_kwargs
+            )
         elif backend == "mock":
             _estimator_cache[cache_key] = _MockEstimator(
                 mock_near_depth=mock_near_depth,
@@ -225,7 +263,7 @@ def get_depth_map(
         else:
             raise ValueError(
                 f"未知的 backend: '{backend}'。"
-                "支持的选项: 'midas', 'depth_anything', 'mock'。"
+                "支持的选项: 'depth_anything_v3', 'depth_anything_v2', 'midas', 'mock'。"
             )
 
     estimator = _estimator_cache[cache_key]

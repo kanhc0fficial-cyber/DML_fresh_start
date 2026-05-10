@@ -44,7 +44,7 @@ from depth_estimator import get_depth_map
 logger = logging.getLogger(__name__)
 
 GroundingBackend = Literal["qwen3vl_api", "dino", "qwen3vl_local", "mock"]
-DepthBackend = Literal["midas", "depth_anything", "mock"]
+DepthBackend = Literal["midas", "depth_anything_v2", "depth_anything_v3", "depth_anything", "mock"]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ class SpatialReasoner:
     def __init__(
         self,
         grounding_backend: GroundingBackend = "qwen3vl_api",
-        depth_backend: DepthBackend = "midas",
+        depth_backend: DepthBackend = "depth_anything_v3",
         camera_intrinsics: Optional[CameraIntrinsics] = None,
         depth_scale_factor: float = 10.0,
         grounding_kwargs: Optional[dict] = None,

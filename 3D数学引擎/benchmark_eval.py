@@ -28,7 +28,7 @@ Benchmark 评测脚本
 
     # 真实模型（需要 API Key 和本地环境）：
     export DASHSCOPE_API_KEY=sk-xxx
-    python benchmark_eval.py --data benchmark_data.json --grounding qwen3vl_api --depth midas
+    python benchmark_eval.py --data benchmark_data.json --grounding qwen3vl_api --depth depth_anything_v3
 
     # 自动生成示例数据并运行 Mock 评测：
     python benchmark_eval.py --mock --generate-sample
@@ -428,7 +428,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--depth",
-        choices=["midas", "depth_anything", "mock"],
+        choices=["midas", "depth_anything_v2", "depth_anything_v3", "depth_anything", "mock"],
         default="mock",
         help="深度估算后端（默认: mock）",
     )

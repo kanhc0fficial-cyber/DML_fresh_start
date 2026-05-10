@@ -292,6 +292,26 @@ class TestDepthEstimatorMock(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.get_depth(img, backend="nonexistent_backend")
 
+    def test_depth_anything_alias_works(self):
+        """'depth_anything' 别名应等价于 'depth_anything_v2'（不抛出异常即通过）。"""
+        from depth_estimator import _BACKEND_ALIASES
+        self.assertEqual(_BACKEND_ALIASES.get("depth_anything"), "depth_anything_v2")
+
+    def test_mock_cache_key_respects_near_far(self):
+        """不同 near/far 参数的 mock 应产生不同的深度图，而不是共用同一缓存。"""
+        from depth_estimator import clear_estimator_cache
+        clear_estimator_cache()
+        img = _make_blank_image(100, 100)
+
+        depth_a = self.get_depth(img, backend="mock", mock_near_depth=2.0, mock_far_depth=5.0)
+        depth_b = self.get_depth(img, backend="mock", mock_near_depth=10.0, mock_far_depth=20.0)
+
+        # 两次调用的中心深度应明显不同
+        center_a = float(depth_a[50, 50])
+        center_b = float(depth_b[50, 50])
+        self.assertNotAlmostEqual(center_a, center_b, places=0,
+                                  msg="不同 near/far 参数应产生不同深度，缓存键必须包含 near/far")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. spatial_reasoner 集成测试（纯 Mock）
