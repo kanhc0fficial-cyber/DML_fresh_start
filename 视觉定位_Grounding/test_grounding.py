@@ -3,7 +3,7 @@
 
 功能：
 1. 自动生成（或复用）10 张测试图像（含"红色车"和"白房子"）
-2. 分别用两种方法（Qwen3-VL、Grounding DINO）进行定位
+2. 用指定方法（Qwen3-VL API、Grounding DINO、Qwen3-VL 本地）进行定位
 3. 计算 IoU，评估定位准确性
 4. 输出结果表格并保存可视化图像
 
@@ -12,13 +12,18 @@
 - 本脚本支持 --mock 模式，可在无模型时验证接口逻辑（返回模拟预测框）。
 
 用法：
-    # 真实推理（需要已安装 groundingdino-py 或 transformers）
+    # Qwen3-VL API（推荐，需要 DASHSCOPE_API_KEY）
+    export DASHSCOPE_API_KEY=sk-xxxxxxxx
+    python test_grounding.py --backend qwen3vl_api
+
+    # Grounding DINO（需本地安装 groundingdino-py）
     python test_grounding.py --backend dino
-    python test_grounding.py --backend qwen3vl
+
+    # Qwen3-VL 本地推理（需要模型权重和 GPU）
+    python test_grounding.py --backend qwen3vl_local
 
     # Mock 模式（无需任何模型，测试流程与指标计算）
     python test_grounding.py --mock
-    python test_grounding.py --mock --backend qwen3vl
 """
 
 from __future__ import annotations
@@ -167,10 +172,13 @@ def run_tests(backend: str = "dino", mock: bool = False) -> None:
     grounder = None
     if not mock:
         try:
-            if backend == "dino":
+            if backend == "qwen3vl_api":
+                from grounding_qwen3vl import Qwen3VLAPIGrounder
+                grounder = Qwen3VLAPIGrounder()
+            elif backend == "dino":
                 from grounding_dino import GroundingDINOGrounder
                 grounder = GroundingDINOGrounder(lazy_load=True)
-            elif backend == "qwen3vl":
+            elif backend == "qwen3vl_local":
                 from grounding_qwen3vl import Qwen3VLGrounder
                 # lazy_load=True 延迟至首张图推理时才加载模型，节省无图时的内存占用
                 grounder = Qwen3VLGrounder(lazy_load=True)
@@ -274,9 +282,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--backend",
-        choices=["dino", "qwen3vl"],
-        default="dino",
-        help="使用的后端模型（默认: dino）",
+        choices=["qwen3vl_api", "dino", "qwen3vl_local"],
+        default="qwen3vl_api",
+        help="使用的后端模型（默认: qwen3vl_api）",
     )
     parser.add_argument(
         "--mock",

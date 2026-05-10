@@ -1,6 +1,6 @@
 # 视觉定位_Grounding
 
-本模块实现了两种**零样本视觉目标定位（Grounding）**方法，提供统一接口 `get_bounding_box(image, object_text)`，返回目标的像素坐标边界框 `[x_min, y_min, x_max, y_max]`。
+本模块实现了**两种零样本视觉目标定位（Grounding）**方法，提供统一接口 `get_bounding_box(image, object_text)`，返回目标的像素坐标边界框 `[x_min, y_min, x_max, y_max]`。
 
 ---
 
@@ -9,8 +9,8 @@
 ```
 视觉定位_Grounding/
 ├── grounding_tool.py         # 统一接口（推荐直接使用）
-├── grounding_dino.py         # 方法一：Grounding DINO（零样本检测标杆）
-├── grounding_qwen3vl.py      # 方法二：Qwen3-VL（视觉语言大模型 Grounding）
+├── grounding_qwen3vl.py      # 方法一：Qwen3-VL（API + 本地推理）
+├── grounding_dino.py         # 方法二：Grounding DINO（开源零样本检测标杆）
 ├── generate_test_images.py   # 生成 10 张合成测试图（含 ground truth）
 ├── test_grounding.py         # 测试脚本（含 Mock 模式，无需真实模型）
 ├── test_images/              # 生成的测试图像及 ground_truth.json
@@ -21,16 +21,35 @@
 
 ---
 
-## 两种方法说明
+## 三种后端说明
 
-### 方法一：Grounding DINO（推荐，开源无 API Key）
+### 方式一（推荐）：Qwen3-VL API
 
-**Grounding DINO** 是开源界零样本（Zero-shot）目标检测的标杆模型，支持任意自然语言描述直接定位目标，无需微调。
+通过阿里云 **DashScope OpenAI 兼容接口**调用 Qwen3-VL，无需本地 GPU 或模型权重。
+
+- API 端点：`https://dashscope.aliyuncs.com/compatible-mode/v1`
+- 模型名：`qwen-vl-max`（默认）或 `qwen3-vl-72b-instruct` 等
+- 优点：即用即调，中文理解能力强，无需本地资源
+- 要求：需要 DashScope API Key（[申请地址](https://bailian.console.aliyun.com/)）
+
+**安装依赖：**
+```bash
+pip install openai pillow
+```
+
+**设置 API Key：**
+```bash
+export DASHSCOPE_API_KEY=sk-xxxxxxxx
+```
+
+### 方式二：Grounding DINO
+
+开源界零样本（Zero-shot）目标检测的标杆模型，支持任意自然语言描述直接定位，无需微调和 API Key。
 
 - 项目地址：https://github.com/IDEA-Research/GroundingDINO
 - 模型：`GroundingDINO-SwinT-OGC`（~172 MB，首次运行自动下载）
-- 优点：纯本地运行，无需 API Key，速度快
-- 注意：对英文描述效果更好（如 `"red car"` 优于 `"红色车"`）
+- 优点：纯本地运行，无需任何网络依赖，速度快
+- 注意：对英文描述效果更佳（如 `"red car"` 优于 `"红色车"`）
 
 **安装依赖：**
 ```bash
@@ -39,16 +58,14 @@ pip install groundingdino-py pillow torch torchvision
 pip install git+https://github.com/IDEA-Research/GroundingDINO.git
 ```
 
-### 方法二：Qwen3-VL（视觉语言大模型）
+### 方式三：Qwen3-VL 本地推理（离线部署）
 
-**Qwen3-VL** 是阿里通义千问系列的视觉语言模型，内置 Grounding 能力，只需在提示词中要求输出边界框坐标即可，无需外接检测工具。
+本地加载 Qwen3-VL 模型权重进行推理，无需 API Key 和网络，适合离线或私有化部署场景。
 
-输出格式：`<|object_ref_start|>目标<|object_ref_end|><|box_start|>(x_min,y_min),(x_max,y_max)<|box_end|>`（坐标为 0~1000 范围内的归一化整数）
-
-- 模型：`Qwen/Qwen3-VL-7B-Instruct`（~14 GB，需要本地 GPU）
-- 优点：理解中文描述能力强，多目标同时定位
-- 注意：需要下载模型权重，推理显存要求约 16 GB
-- 说明：当前 `transformers` 使用 `Qwen2_5_VLForConditionalGeneration` 类加载（Qwen3-VL 与 Qwen2.5-VL 共享架构），未来 transformers 独立支持 Qwen3-VL 后会自动更新
+- 模型：`Qwen/Qwen3-VL-7B-Instruct`（~14 GB）
+- 优点：数据不出本地，适合对数据安全有要求的场景
+- 要求：GPU 显存约 16 GB
+- 说明：当前 `transformers` 使用 `Qwen2_5_VLForConditionalGeneration` 类加载（Qwen3-VL 与 Qwen2.5-VL 共享架构）
 
 **安装依赖：**
 ```bash
@@ -64,27 +81,37 @@ pip install transformers accelerate torch torchvision pillow
 ```python
 from grounding_tool import get_bounding_box
 
-# 使用 Grounding DINO（默认，推荐）
-box = get_bounding_box("car.jpg", "red car", backend="dino")
+# 方式一：Qwen3-VL API（默认，需要 DASHSCOPE_API_KEY）
+box = get_bounding_box("car.jpg", "红色车")
+box = get_bounding_box("car.jpg", "红色车", backend="qwen3vl_api")
 print(box)  # [x_min, y_min, x_max, y_max]（像素坐标）
 
-# 使用 Qwen3-VL
-box = get_bounding_box("house.jpg", "白房子", backend="qwen3vl")
+# 方式二：Grounding DINO
+box = get_bounding_box("car.jpg", "red car", backend="dino")
+
+# 方式三：Qwen3-VL 本地推理
+box = get_bounding_box("car.jpg", "红色车", backend="qwen3vl_local")
 
 # 返回所有检测框（多目标）
-boxes = get_bounding_box("scene.jpg", "red car", backend="dino", return_all=True)
+boxes = get_bounding_box("scene.jpg", "红色车", return_all=True)
 ```
 
 ### 直接使用各后端
 
 ```python
+# Qwen3-VL API
+from grounding_qwen3vl import Qwen3VLAPIGrounder
+
+grounder = Qwen3VLAPIGrounder(api_key="sk-xxx", model="qwen-vl-max")
+box = grounder.get_bounding_box("car.jpg", "红色车")
+
 # Grounding DINO
 from grounding_dino import GroundingDINOGrounder
 
 grounder = GroundingDINOGrounder(device="cuda", box_threshold=0.35)
 box = grounder.get_bounding_box("car.jpg", "red car")
 
-# Qwen3-VL
+# Qwen3-VL 本地推理
 from grounding_qwen3vl import Qwen3VLGrounder
 
 grounder = Qwen3VLGrounder(model_name_or_path="Qwen/Qwen3-VL-7B-Instruct")
@@ -106,11 +133,15 @@ python test_grounding.py --mock
 ### 真实模型测试
 
 ```bash
-# 使用 Grounding DINO 测试 10 张图
+# 使用 Qwen3-VL API（推荐）
+export DASHSCOPE_API_KEY=sk-xxxxxxxx
+python test_grounding.py --backend qwen3vl_api
+
+# 使用 Grounding DINO
 python test_grounding.py --backend dino
 
-# 使用 Qwen3-VL 测试
-python test_grounding.py --backend qwen3vl
+# 使用 Qwen3-VL 本地推理
+python test_grounding.py --backend qwen3vl_local
 ```
 
 测试脚本会：
@@ -141,11 +172,28 @@ python test_grounding.py --backend qwen3vl
 
 ---
 
-## 参数调优
+## 参数参考
 
+### Qwen3VLAPIGrounder
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `box_threshold` | 0.35 | GroundingDINO 框置信度阈值，提高可减少误检 |
-| `text_threshold` | 0.25 | GroundingDINO 文本匹配阈值 |
-| `device` | "cuda" | 推理设备，无 GPU 时设为 "cpu" |
-| `lazy_load` | True | 首次调用时才加载模型，节省内存 |
+| `api_key` | 环境变量 `DASHSCOPE_API_KEY` | DashScope API Key |
+| `model` | `"qwen-vl-max"` | API 模型名称 |
+| `base_url` | DashScope 地址 | API 端点 |
+| `max_tokens` | 256 | 最大生成 token 数 |
+| `image_format` | `"JPEG"` | 图像编码格式 |
+
+### GroundingDINOGrounder
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `box_threshold` | 0.35 | 框置信度阈值，提高可减少误检 |
+| `text_threshold` | 0.25 | 文本匹配阈值 |
+| `device` | `"cuda"` | 推理设备，无 GPU 时设为 `"cpu"` |
+| `lazy_load` | True | 首次调用时才加载模型 |
+
+### Qwen3VLGrounder（本地）
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `model_name_or_path` | `"Qwen/Qwen3-VL-7B-Instruct"` | 模型路径或 Hub 名称 |
+| `device` | `"cuda"` | 推理设备 |
+| `lazy_load` | True | 首次调用时才加载模型 |
