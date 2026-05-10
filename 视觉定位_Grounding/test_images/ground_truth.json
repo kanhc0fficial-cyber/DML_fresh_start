@@ -1,0 +1,120 @@
+{
+  "test_01_red_car_only.png": {
+    "file": "test_01_red_car_only.png",
+    "target": "红色车",
+    "gt_primary_box": [
+      22,
+      150,
+      183,
+      244
+    ]
+  },
+  "test_02_white_house_only.png": {
+    "file": "test_02_white_house_only.png",
+    "target": "白房子",
+    "gt_primary_box": [
+      81,
+      62,
+      192,
+      170
+    ]
+  },
+  "test_03_car_and_house.png": {
+    "file": "test_03_car_and_house.png",
+    "target": "红色车",
+    "gt_primary_box": [
+      289,
+      54,
+      455,
+      228
+    ],
+    "gt_secondary_box": [
+      50,
+      292,
+      248,
+      420
+    ]
+  },
+  "test_04_car_and_house_2.png": {
+    "file": "test_04_car_and_house_2.png",
+    "target": "白房子",
+    "gt_primary_box": [
+      331,
+      195,
+      448,
+      381
+    ]
+  },
+  "test_05_two_cars.png": {
+    "file": "test_05_two_cars.png",
+    "target": "红色车",
+    "gt_primary_box": [
+      101,
+      269,
+      245,
+      446
+    ],
+    "gt_secondary_box": [
+      281,
+      10,
+      460,
+      208
+    ]
+  },
+  "test_06_two_houses.png": {
+    "file": "test_06_two_houses.png",
+    "target": "白房子",
+    "gt_primary_box": [
+      260,
+      19,
+      416,
+      140
+    ],
+    "gt_secondary_box": [
+      496,
+      291,
+      592,
+      455
+    ]
+  },
+  "test_07_car_large.png": {
+    "file": "test_07_car_large.png",
+    "target": "红色车",
+    "gt_primary_box": [
+      320,
+      205,
+      541,
+      381
+    ]
+  },
+  "test_08_house_large.png": {
+    "file": "test_08_house_large.png",
+    "target": "白房子",
+    "gt_primary_box": [
+      326,
+      243,
+      580,
+      416
+    ]
+  },
+  "test_09_car_corner.png": {
+    "file": "test_09_car_corner.png",
+    "target": "红色车",
+    "gt_primary_box": [
+      20,
+      20,
+      166,
+      144
+    ]
+  },
+  "test_10_house_corner.png": {
+    "file": "test_10_house_corner.png",
+    "target": "白房子",
+    "gt_primary_box": [
+      20,
+      20,
+      132,
+      145
+    ]
+  }
+}
