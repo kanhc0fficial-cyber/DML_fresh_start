@@ -85,6 +85,8 @@ _FINAL_ANSWER_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+_FALLBACK_RESPONSE_MAX_LENGTH = 200  # 兜底响应截取最大字符数
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 图像工具函数
 # ─────────────────────────────────────────────────────────────────────────────
@@ -220,7 +222,9 @@ class ReactAgent:
             messages=messages,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
-            stop=["\nObservation:", "Observation:"],
+            # 两条停止序列互补："\nObservation:" 捕获行中出现的情况，
+        # "Observation:" 额外防止模型在响应首行就开始伪造观测值。
+        stop=["\nObservation:", "Observation:"],
         )
         content = response.choices[0].message.content
         if isinstance(content, list):
@@ -266,6 +270,8 @@ class ReactAgent:
         except json.JSONDecodeError as exc:
             logger.warning("Action Input JSON 解析失败: %s | 原始文本: %s", exc, raw_json)
             # 尝试容错：用 ast.literal_eval 处理单引号 JSON
+            # ast.literal_eval 作为容错回退，仅支持 Python 字面量语法（如单引号 JSON）。
+            # 输入来自受控的 VLM API 响应，不存在任意代码执行风险。
             try:
                 import ast
                 params = ast.literal_eval(raw_json)
@@ -293,9 +299,10 @@ class ReactAgent:
     # ------------------------------------------------------------------
 
     def _log(self, tag: str, content: str) -> None:
-        """在 verbose 模式下将步骤信息打印到标准输出。"""
+        """在 verbose 模式下将步骤信息打印到标准错误流。"""
         if self.verbose:
-            print(f"\n[{tag}]\n{content}", flush=True)
+            import sys
+            print(f"\n[{tag}]\n{content}", file=sys.stderr, flush=True)
         logger.debug("[%s] %s", tag, content)
 
     # ------------------------------------------------------------------
@@ -456,7 +463,7 @@ class ReactAgent:
             if final:
                 return final
             # 若仍无 Final Answer，返回原始响应的前 200 字符
-            return response[:200].strip() or "无法确定答案。"
+            return response[:_FALLBACK_RESPONSE_MAX_LENGTH].strip() or "无法确定答案。"
         except Exception as exc:
             logger.error("兜底策略 VLM 调用失败: %s", exc)
             return f"无法确定答案（兜底策略失败：{exc}）。"

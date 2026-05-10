@@ -60,7 +60,8 @@ class ToolExecutor:
     camera_intrinsics : tuple or None
         相机内参 (f_x, f_y, c_x, c_y)，None 时按 90° FOV 自动估算。
     depth_scale_factor : float
-        深度图缩放系数（将相对深度映射为近似米数）。
+        深度图缩放系数：将相对深度（归一化到 [0,1]）映射为近似米数的最大范围。
+        默认 10.0 表示场景深度范围约为 0~10 米，可根据实际场景调整。
     grounding_kwargs : dict
         传递给 grounding 后端的额外参数（例如 api_key）。
     depth_kwargs : dict
