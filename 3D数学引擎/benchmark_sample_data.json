@@ -1,0 +1,105 @@
+[
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_01.png",
+    "question": "What is the distance between the red car and the white van?",
+    "task_type": "distance",
+    "query_objects": [
+      "red car",
+      "white van"
+    ],
+    "gt_answer": "11.8 meters",
+    "gt_distance_m": 11.8
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_02.png",
+    "question": "From the perspective of the blue truck, where is the yellow bus?",
+    "task_type": "direction_clock",
+    "query_objects": [
+      "blue truck",
+      "yellow bus"
+    ],
+    "gt_answer": "2 o'clock"
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_03.png",
+    "question": "In which compass direction is the green tree from the white van?",
+    "task_type": "direction_cardinal",
+    "query_objects": [
+      "white van",
+      "green tree"
+    ],
+    "gt_answer": "South-East"
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_04.png",
+    "question": "How wide is the yellow bus?",
+    "task_type": "size",
+    "query_objects": [
+      "yellow bus"
+    ],
+    "gt_answer": "approximately 2 meters",
+    "gt_width_m": 2.0
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_05.png",
+    "question": "What is the distance between the green tree and the blue truck?",
+    "task_type": "distance",
+    "query_objects": [
+      "green tree",
+      "blue truck"
+    ],
+    "gt_answer": "8.4 meters",
+    "gt_distance_m": 8.4
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_06.png",
+    "question": "From the perspective of the red car, where is the white van?",
+    "task_type": "direction_clock",
+    "query_objects": [
+      "red car",
+      "white van"
+    ],
+    "gt_answer": "1 o'clock"
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_07.png",
+    "question": "In which compass direction is the yellow bus from the blue truck?",
+    "task_type": "direction_cardinal",
+    "query_objects": [
+      "blue truck",
+      "yellow bus"
+    ],
+    "gt_answer": "East"
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_08.png",
+    "question": "How wide is the white van?",
+    "task_type": "size",
+    "query_objects": [
+      "white van"
+    ],
+    "gt_answer": "approximately 2 meters",
+    "gt_width_m": 2.0
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_09.png",
+    "question": "What is the distance between the yellow bus and the red car?",
+    "task_type": "distance",
+    "query_objects": [
+      "yellow bus",
+      "red car"
+    ],
+    "gt_answer": "9.1 meters",
+    "gt_distance_m": 9.1
+  },
+  {
+    "image": "/home/runner/work/DML_fresh_start/DML_fresh_start/3D数学引擎/benchmark_images/sample_10.png",
+    "question": "From the perspective of the green tree, where is the blue truck?",
+    "task_type": "direction_clock",
+    "query_objects": [
+      "green tree",
+      "blue truck"
+    ],
+    "gt_answer": "3 o'clock"
+  }
+]
