@@ -889,14 +889,22 @@ def run_outlet(outlet_key: str) -> pd.DataFrame:
     if ENABLE_OPTUNA:
         print("  [LSTM] 开始 Optuna 超参数搜索 ...")
         tuned = tune_lstm(X_train_raw, X_val_raw, y_train, y_val)
-        lstm_params = {k: tuned[k] for k in ("seq_len", "hidden", "n_layers", "dropout", "lr", "batch_size")}
+        lstm_params = {
+            "seq_len":    tuned.get("seq_len",    LSTM_SEQ_LEN),
+            "hidden":     tuned.get("hidden",     LSTM_HIDDEN),
+            "n_layers":   tuned.get("n_layers",   LSTM_LAYERS),
+            "dropout":    tuned.get("dropout",    LSTM_DROPOUT),
+            "lr":         tuned.get("lr",         LSTM_LR),
+            "batch_size": tuned.get("batch_size", LSTM_BATCH),
+        }
         best_params_all["LSTM"] = lstm_params
 
-    seq_len = lstm_params.pop("seq_len", LSTM_SEQ_LEN)
+    seq_len = lstm_params.get("seq_len", LSTM_SEQ_LEN)
+    lstm_run_params = {k: v for k, v in lstm_params.items() if k != "seq_len"}
     ptr, pte = run_lstm(
         X_train_raw, X_val_raw, X_test_raw,
         y_train, y_val, y_test,
-        seq_len=seq_len, **lstm_params,
+        seq_len=seq_len, **lstm_run_params,
     )
     # 对齐：前 seq_len-1 个位置无预测（NaN 填充），跳过这些位置
     pad = seq_len - 1
