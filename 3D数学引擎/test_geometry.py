@@ -281,7 +281,7 @@ class TestDepthEstimatorMock(unittest.TestCase):
         corner_depth = depth[0, 0]
         self.assertLess(center_depth, corner_depth, "中心应浅于角落")
 
-    def test_mock_accepts_path(self, tmp_path=None):
+    def test_mock_accepts_path(self):
         """Mock 后端应能接受 PIL.Image 而不抛出异常。"""
         img = _make_blank_image(320, 240)
         depth = self.get_depth(img, backend="mock")
@@ -390,6 +390,7 @@ class TestBenchmarkEval(unittest.TestCase):
                     samples,
                     grounding_backend="mock",
                     depth_backend="mock",
+                    base_dir=Path(tmpdir),
                 )
             finally:
                 benchmark_eval.SCRIPT_DIR = orig_dir

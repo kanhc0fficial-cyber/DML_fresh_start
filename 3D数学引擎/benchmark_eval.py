@@ -132,6 +132,8 @@ def generate_sample_benchmark(out_path: Path, n_samples: int = 10) -> list[dict]
 
         img_name = f"sample_{i + 1:02d}.png"
         img.save(str(img_dir / img_name))
+        # Store path relative to the JSON file for portability
+        rel_img = str(Path("benchmark_images") / img_name)
 
         task_type = task_types[i % len(task_types)]
 
@@ -140,7 +142,7 @@ def generate_sample_benchmark(out_path: Path, n_samples: int = 10) -> list[dict]
             px_dist = math.sqrt((ax - bx) ** 2 + (ay - by) ** 2)
             gt_dist = round(px_dist / 30.0, 1)  # 简单映射：30px ≈ 1m
             samples.append({
-                "image": str(img_dir / img_name),
+                "image": rel_img,
                 "question": f"What is the distance between the {obj_A_name} and the {obj_B_name}?",
                 "task_type": "distance",
                 "query_objects": [obj_A_name, obj_B_name],
@@ -158,7 +160,7 @@ def generate_sample_benchmark(out_path: Path, n_samples: int = 10) -> list[dict]
             if clock == 0:
                 clock = 12
             samples.append({
-                "image": str(img_dir / img_name),
+                "image": rel_img,
                 "question": (
                     f"From the perspective of the {obj_A_name}, "
                     f"where is the {obj_B_name}?"
@@ -178,7 +180,7 @@ def generate_sample_benchmark(out_path: Path, n_samples: int = 10) -> list[dict]
                     "South", "South-West", "West", "North-West"]
             gt_dir = dirs[int(round(angle / 45)) % 8]
             samples.append({
-                "image": str(img_dir / img_name),
+                "image": rel_img,
                 "question": (
                     f"In which compass direction is the {obj_B_name} from the {obj_A_name}?"
                 ),
@@ -189,7 +191,7 @@ def generate_sample_benchmark(out_path: Path, n_samples: int = 10) -> list[dict]
 
         else:  # size
             samples.append({
-                "image": str(img_dir / img_name),
+                "image": rel_img,
                 "question": f"How wide is the {obj_A_name}?",
                 "task_type": "size",
                 "query_objects": [obj_A_name],
@@ -214,9 +216,19 @@ def run_benchmark(
     distance_error_threshold_pct: float = 30.0,
     clock_error_threshold: int = 2,
     verbose: bool = True,
+    base_dir: Optional[Path] = None,
 ) -> dict[str, Any]:
-    """在给定样本列表上运行评测，返回汇总指标。"""
+    """在给定样本列表上运行评测，返回汇总指标。
+
+    Parameters
+    ----------
+    base_dir : Path or None
+        用于解析样本中相对图像路径的基准目录。
+        None 时使用脚本所在目录（SCRIPT_DIR）。
+    """
     from spatial_reasoner import SpatialReasoner
+
+    resolve_base = base_dir or SCRIPT_DIR
 
     reasoner = SpatialReasoner(
         grounding_backend=grounding_backend,
@@ -233,7 +245,12 @@ def run_benchmark(
     total_start = time.time()
 
     for idx, sample in enumerate(samples):
-        image = sample["image"]
+        image_raw = sample["image"]
+        # 解析相对路径（相对于 base_dir）
+        image_path = Path(image_raw)
+        if not image_path.is_absolute():
+            image_path = resolve_base / image_path
+        image = str(image_path)
         task_type = sample.get("task_type", "unknown")
         objects = sample.get("query_objects", [])
         gt_answer = sample.get("gt_answer", "")

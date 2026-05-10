@@ -56,3 +56,9 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# 3D数学引擎：运行时生成的评测结果和样本图像（本地生成，不需要版本控制）
+3D数学引擎/benchmark_images/
+3D数学引擎/benchmark_results_*.json
+3D数学引擎/benchmark_sample_data.json
+3D数学引擎/model_weights/
