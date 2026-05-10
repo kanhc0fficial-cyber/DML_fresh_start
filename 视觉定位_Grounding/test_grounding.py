@@ -184,8 +184,8 @@ def run_tests(backend: str = "dino", mock: bool = False) -> None:
                 grounder = Qwen3VLGrounder(lazy_load=True)
             else:
                 raise ValueError(f"未知 backend: {backend}")
-        except ImportError as e:
-            logger.error("导入失败: %s\n请安装依赖或使用 --mock 模式运行", e)
+        except (ImportError, ValueError) as e:
+            logger.error("初始化失败: %s\n请安装依赖、设置 API Key，或使用 --mock 模式运行", e)
             sys.exit(1)
 
     # Step 3: 逐图测试

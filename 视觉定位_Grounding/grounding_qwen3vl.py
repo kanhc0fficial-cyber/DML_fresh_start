@@ -80,6 +80,24 @@ def _image_to_data_url(image: Image.Image, fmt: str = "JPEG") -> str:
     return f"data:{mime};base64,{b64}"
 
 
+def _extract_response_text(content: object) -> str:
+    """兼容 OpenAI 风格字符串/分段 content，提取纯文本响应。"""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict):
+                if part.get("type") == "text" and isinstance(part.get("text"), str):
+                    text_parts.append(part["text"])
+            elif hasattr(part, "type") and getattr(part, "type") == "text":
+                text = getattr(part, "text", "")
+                if isinstance(text, str):
+                    text_parts.append(text)
+        return "\n".join(text_parts)
+    return ""
+
+
 # ──────────────────────────────────────────────
 # 方式一（推荐）：API 调用
 # ──────────────────────────────────────────────
@@ -193,7 +211,7 @@ class Qwen3VLAPIGrounder:
             messages=messages,
             max_tokens=self.max_tokens,
         )
-        reply = response.choices[0].message.content or ""
+        reply = _extract_response_text(response.choices[0].message.content)
         logger.debug("API 原始返回:\n%s", reply)
 
         boxes = _parse_qwen_boxes(reply, img_w, img_h)
