@@ -1,0 +1,5 @@
+model_weights/
+visualization_results/
+test_results_*.json
+__pycache__/
+*.pyc
