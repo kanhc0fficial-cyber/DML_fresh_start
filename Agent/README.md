@@ -1,275 +1,441 @@
-# Agent — 轻量级 ReAct 空间推理智能体
+# Agent 模块说明
 
-> **定位**：面向无人机俯视图空间推理竞赛（如 Open3D-VQA / DML 打榜）的轻量级手写 ReAct 状态机框架。  
-> 拒绝 LangChain 黑盒，100% 自主控制循环、格式、兜底策略。
+`Agent/` 是仓库里面向无人机俯视图空间问答的轻量级 ReAct 智能体实现。它不依赖 LangChain 一类外层框架，而是直接用 Python 手写了：
+
+1. **提示词协议层**：约束模型只能按 `Thought -> Action -> Observation -> Final Answer` 工作；
+2. **工具执行层**：把工具名路由到视觉定位与 3D 几何计算模块；
+3. **状态机推理层**：循环调用多模态大模型、解析动作、执行工具、注入 Observation；
+4. **批量运行层**：面向竞赛数据集做断点续传、并发、重试和 JSONL 提交文件输出。
 
 ---
 
-## 一、整体架构
+## 目录结构
 
-```
+```text
 Agent/
-├── prompt_template.py   ← 第一段：大脑与"语言协议"（System Prompt + 格式协议）
-├── tool_executor.py     ← 第二段：工具执行器（路由到 Grounding + 3D 引擎）
-├── react_agent.py       ← 第二段：ReAct 状态机主循环（Thought → Action → Observation）
-├── pipeline_runner.py   ← 第三段：竞赛打榜批量推理主循环（断点续传 + 并发 + 提交文件）
+├── __init__.py
+├── prompt_template.py
+├── tool_executor.py
+├── react_agent.py
+├── pipeline_runner.py
 ├── tests/
-│   └── test_agent_mock.py  ← 端到端 Mock 测试（35 条，无需 API Key / GPU）
-└── README.md            ← 本文档
+│   └── test_agent_mock.py
+└── README.md
 ```
 
-### 数据流
+各文件职责如下：
 
-```
-问题 + 图像
-    │
-    ▼
-[System Prompt]          ← prompt_template.py
-    │                       定义角色、工具列表、输出格式
-    ▼
-[VLM API 调用]           ← react_agent.py
-    │
-    ├─ 解析 Action?
-    │    └─ [ToolExecutor.execute()]  ← tool_executor.py
-    │          ├─ get_bounding_box        → 视觉定位_Grounding/
-    │          ├─ calculate_3d_distance   → 3D数学引擎/spatial_reasoner.py
-    │          ├─ calculate_horizontal_distance
-    │          ├─ calculate_vertical_distance
-    │          ├─ get_direction
-    │          └─ get_object_size
-    │
-    ├─ 解析 Final Answer? → 返回答案
-    └─ 超出最大迭代?      → 兜底策略（Fallback）
-         │
-         ▼
-[CompetitionPipeline]    ← pipeline_runner.py
-    ├─ 断点续传（Checkpoint）
-    ├─ 指数退避重试
-    ├─ 多线程并发
-    └─ 输出 JSONL 提交文件
-```
+| 文件 | 作用 |
+|---|---|
+| `prompt_template.py` | 定义系统提示词、工具名常量、用户问题与 Observation 文本模板 |
+| `tool_executor.py` | 将 Agent 输出的工具调用映射到 Grounding 与 3D 数学引擎 |
+| `react_agent.py` | 核心 ReAct 状态机，负责 VLM 调用、解析、循环控制、兜底 |
+| `pipeline_runner.py` | 批量推理主循环，负责数据加载、路径解析、重试、并发、检查点与提交文件 |
+| `tests/test_agent_mock.py` | Mock 模式下的导入、工具、状态机、Pipeline、Checkpoint 测试 |
 
 ---
 
-## 二、快速使用
+## 代码级工作流
 
-### 2.1 单条推理（一行代码）
+```text
+图像 + 问题
+   │
+   ▼
+ReactAgent.run()
+   │
+   ├─ 构造 system/user messages
+   ├─ 调用 VLM
+   ├─ 解析 Final Answer ?
+   │      └─ 是 -> 直接返回
+   └─ 解析 Action + Action Input
+          │
+          ▼
+      ToolExecutor.execute()
+          │
+          ├─ get_bounding_box -> 视觉定位_Grounding/grounding_tool.py
+          └─ 距离/方向/尺寸 -> 3D数学引擎/spatial_reasoner.py
+                    │
+                    ▼
+          Observation 回写到对话历史
+                    │
+                    ▼
+               继续下一轮
+
+达到最大轮数后：
+ReactAgent._fallback() 强制模型基于已有 Observation 输出 Final Answer
+```
+
+批量场景下，`CompetitionPipeline.run()` 会在外层包住 `ReactAgent.run()`，负责：
+
+- 读取 JSON / JSONL 数据集；
+- 解析图像相对路径；
+- 失败重试与指数退避；
+- 多线程并发；
+- 检查点续跑；
+- 输出提交文件与运行日志。
+
+---
+
+## 核心模块详解
+
+### 1. `prompt_template.py`
+
+这个文件定义了 Agent 的“语言协议”。
+
+- `TOOL_NAMES` / `ALL_TOOL_NAMES`：工具名常量，避免状态机里写魔法字符串；
+- `AGENT_SYSTEM_PROMPT`：约束模型只能使用 6 个工具之一，并强制输出两种格式之一：
+  - `Thought + Action + Action Input`
+  - `Thought + Final Answer`
+- `format_user_question(question)`：把自然语言问题包装成标准用户文本；
+- `format_observation(tool_name, result)`：把工具结果包装成 `Observation: ...` 文本。
+
+当前 Agent 暴露给模型的工具只有 6 个：
+
+1. `get_bounding_box`
+2. `calculate_3d_distance`
+3. `calculate_horizontal_distance`
+4. `calculate_vertical_distance`
+5. `get_direction`
+6. `get_object_size`
+
+---
+
+### 2. `tool_executor.py`
+
+`ToolExecutor` 是 Agent 与底层感知/几何模块之间的统一路由层。
+
+#### 初始化参数
+
+- `image_path`
+- `grounding_backend`
+- `depth_backend`
+- `camera_intrinsics`
+- `depth_scale_factor`
+- `grounding_kwargs`
+- `depth_kwargs`
+
+#### 关键实现点
+
+- **懒加载 `SpatialReasoner`**：只有第一次用到距离/方向/尺寸工具时才实例化；
+- **统一异常包装**：所有工具调用都走 `_safe_call()`，异常不会打断 Agent 主循环，而是被转成字符串；
+- **统一入口**：外部只需要调用 `execute(tool_name, params)`。
+
+#### 实际路由关系
+
+| Agent 工具 | 目标实现 |
+|---|---|
+| `get_bounding_box` | `视觉定位_Grounding/grounding_tool.py` |
+| `calculate_3d_distance` | `SpatialReasoner.measure_distance(..., mode="absolute")` |
+| `calculate_horizontal_distance` | `SpatialReasoner.measure_distance(..., mode="horizontal")` |
+| `calculate_vertical_distance` | `SpatialReasoner.measure_distance(..., mode="vertical")` |
+| `get_direction` | `SpatialReasoner.get_direction(...)` |
+| `get_object_size` | `SpatialReasoner.get_object_size(...)` |
+
+---
+
+### 3. `react_agent.py`
+
+`ReactAgent` 是整个 Agent 的核心控制器。
+
+#### 主要参数
+
+| 参数 | 默认值 | 说明 |
+|---|---:|---|
+| `model` | `qwen-vl-max` | 多模态模型名称 |
+| `api_key` | 环境变量读取 | DashScope API Key |
+| `base_url` | DashScope OpenAI 兼容地址 | API 基地址 |
+| `max_iterations` | `8` | 最多循环多少轮 |
+| `max_tokens` | `512` | 单轮输出 token 上限 |
+| `temperature` | `0.0` | 推理温度 |
+| `grounding_backend` | `qwen3vl_api` | 目标定位后端 |
+| `depth_backend` | `depth_anything_v3` | 深度估计后端 |
+| `verbose` | `False` | 是否打印详细中间过程 |
+
+#### 代码行为
+
+1. 读取图像并编码为 base64 data URL；
+2. 构造 `system` + `user` 消息；
+3. 调用大模型；
+4. 先解析 `Final Answer`；
+5. 若没有最终答案，再解析 `Action` 与 `Action Input`；
+6. 执行工具并把结果写回成 `Observation`；
+7. 继续下一轮；
+8. 超过最大轮数时进入 `_fallback()`。
+
+#### 关键保护机制
+
+- **停止序列**：调用 VLM 时设置 `stop=["\\nObservation:", "Observation:"]`，减少模型伪造 Observation 的机会；
+- **格式恢复**：若既没有合法 `Action` 也没有 `Final Answer`，会注入格式错误提示并继续；
+- **JSON 容错**：`Action Input` 先走 `json.loads()`，失败后回退到 `ast.literal_eval()`；
+- **显式兜底**：达到上限后强制模型基于已有 Observation 输出最终答案。
+
+#### 公开入口
+
+- `ReactAgent.run(image_path, question, ...)`
+- `run_agent(image_path, question, ...)`
+
+---
+
+### 4. `pipeline_runner.py`
+
+`CompetitionPipeline` 是面向批量数据集的外层运行器。
+
+#### 支持的数据格式
+
+输入支持两种：
+
+- `.json`：JSON 数组
+- `.jsonl`：每行一条 JSON
+
+每条记录至少包含：
+
+```json
+{
+  "id": "q1",
+  "image": "scene.png",
+  "question": "红色车和路灯距离多远？"
+}
+```
+
+如果没有 `id`，代码会自动按行号补齐。
+
+#### 路径解析规则
+
+`_resolve_image()` 的优先级是：
+
+1. 数据里已经给的是绝对路径；
+2. 若设置了 `image_base_dir`，优先拼到这个目录下；
+3. 否则拼到数据文件所在目录下。
+
+#### 关键能力
+
+- `Checkpoint`：JSONL 持久化检查点，线程安全；
+- `_process_one()`：单条样本重试，失败时返回错误记录，不拖垮整批任务；
+- `_get_agent()`：每个线程独立持有一个 `ReactAgent` 实例；
+- `_write_submission()`：按 `id` 排序，写出标准提交 JSONL；
+- 同时生成 `*.run_log.json` 记录总量、错误数、吞吐量等统计信息。
+
+#### 公开入口
+
+- `CompetitionPipeline.run(data_path, output_path, resume=True)`
+- `run_competition(data_path, output_path, ...)`
+
+---
+
+## 后端与依赖关系
+
+Agent 本身不直接实现视觉定位和 3D 几何，而是调用兄弟目录中的模块：
+
+- `视觉定位_Grounding/`
+- `3D数学引擎/`
+
+### Grounding 后端
+
+代码里明确支持：
+
+- `qwen3vl_api`
+- `dino`
+- `qwen3vl_local`
+- `mock`
+
+其中 `mock` 会返回合成边界框，方便测试与联调。
+
+### Depth 后端
+
+批量运行 CLI 中支持：
+
+- `depth_anything_v3`
+- `depth_anything_v2`
+- `depth_anything`
+- `midas`
+- `mock`
+
+---
+
+## 使用方式
+
+### 1. 作为包导入
+
+从仓库根目录可以直接导入：
 
 ```python
-from Agent.react_agent import run_agent
-import os
+from Agent import ReactAgent, run_agent, CompetitionPipeline, run_competition
+```
 
-os.environ["DASHSCOPE_API_KEY"] = "sk-xxxxxxxx"
+---
+
+### 2. 单条推理
+
+```python
+from Agent import run_agent
 
 answer = run_agent(
-    image_path="scene.jpg",
+    image_path="/absolute/path/to/scene.jpg",
     question="图中红色轿车和路灯相距多远？",
-)
-print(answer)   # 例如: "8.5 meters"
-```
-
-### 2.2 批量竞赛推理（9k 数据）
-
-```python
-from Agent.pipeline_runner import run_competition
-
-run_competition(
-    data_path="competition_9k.json",
-    output_path="submission.jsonl",
     model="qwen-vl-max",
     grounding_backend="qwen3vl_api",
     depth_backend="depth_anything_v3",
-    max_workers=4,          # 并发线程数
-    checkpoint_dir="./checkpoints",  # 断点续传目录
 )
-```
 
-### 2.3 命令行运行（竞赛场景）
-
-```bash
-# 真实模式
-export DASHSCOPE_API_KEY=sk-xxxxxxxx
-python Agent/pipeline_runner.py \
-    --data competition_9k.json \
-    --output submission.jsonl \
-    --model qwen-vl-max \
-    --grounding qwen3vl_api \
-    --depth depth_anything_v3 \
-    --workers 4
-
-# Mock 模式（验证流程，无需 API Key 和 GPU）
-python Agent/pipeline_runner.py \
-    --mock \
-    --data sample.json \
-    --output submission.jsonl
-```
-
-### 2.4 运行测试
-
-```bash
-# 全部 35 条测试（无需 API Key 或 GPU，约 1 秒完成）
-python Agent/tests/test_agent_mock.py --verbose
+print(answer)
 ```
 
 ---
 
-## 三、模块详解
-
-### 3.1 第一段：`prompt_template.py` — 大脑与"语言协议"
-
-**核心设计**：将对大模型的"思维方式要求"写死在系统提示词里，使模型无法绕过工具链直接猜测答案。
-
-系统提示词 `AGENT_SYSTEM_PROMPT` 包含三大要素：
-
-| 要素 | 内容 |
-|------|------|
-| **角色设定** | 精确的无人机 3D 空间推理智能体，禁止猜测物理量 |
-| **可用工具列表** | 6 个工具，含精确的参数格式和返回值说明 |
-| **强制输出格式** | Thought/Action/Action Input 或 Final Answer，格式违反时系统会给出纠错 Observation |
-
-**可用工具一览**：
-
-| 工具名 | 功能 | 适用题型 |
-|--------|------|---------|
-| `get_bounding_box` | 定位目标，返回 2D 边界框 | 确认目标存在；辅助定位 |
-| `calculate_3d_distance` | 三维直线距离（含高度差） | "A 和 B 距离多远？" |
-| `calculate_horizontal_distance` | 水平面距离（忽略高度差） | "水平距离是多少？" |
-| `calculate_vertical_distance` | 高度差 | "A 比 B 高多少？" |
-| `get_direction` | 方向（钟表/罗盘/完整） | "B 在 A 的什么方向？" |
-| `get_object_size` | 物体三维尺寸（宽/高/深） | "这辆车有多宽？" |
-
-### 3.2 第二段：`tool_executor.py` — 工具执行器
-
-**核心设计**：所有工具方法都用 `_safe_call()` 包裹，任何异常均转为字符串返回，
-确保 Agent 主循环永远不会因工具崩溃而中断。
+### 3. 批量推理
 
 ```python
-from Agent.tool_executor import ToolExecutor
+from Agent import run_competition
 
-executor = ToolExecutor(
-    image_path="scene.jpg",
-    grounding_backend="qwen3vl_api",   # 或 "mock" 用于测试
-    depth_backend="depth_anything_v3", # 或 "mock" 用于测试
-)
-
-# 直接调用工具
-result = executor.execute("get_bounding_box", {"object_name": "红色轿车"})
-result = executor.execute("calculate_3d_distance", {"obj_1": "红色轿车", "obj_2": "路灯"})
-result = executor.execute("get_direction", {
-    "from_object": "无人机", "to_object": "建筑物", "mode": "clock"
-})
-```
-
-### 3.3 第二段：`react_agent.py` — ReAct 状态机主循环
-
-**核心设计**：纯 Python 手写状态机，完全控制每一步的格式解析和异常处理。
-
-关键机制：
-
-| 机制 | 说明 |
-|------|------|
-| **停止序列** | API 调用时传入 `stop=["Observation:"]`，阻止模型伪造工具返回值 |
-| **格式纠错** | 模型输出不符合格式时，注入"格式错误"Observation 并继续循环 |
-| **JSON 容错** | 单引号 JSON / 格式略有偏差时，`ast.literal_eval` 兜底解析 |
-| **兜底策略** | 达到最大迭代上限后，追加强制指令让模型基于已有数据给出答案 |
-
-### 3.4 第三段：`pipeline_runner.py` — 竞赛打榜主循环
-
-**核心设计**：针对 9k 量级数据的高稳定性批量推理引擎。
-
-| 功能 | 说明 |
-|------|------|
-| **断点续传** | 中途崩溃后重启，自动跳过已完成条目（Checkpoint JSONL） |
-| **指数退避重试** | API 限速/网络波动时自动等待重试，最多 3 次 |
-| **并发控制** | ThreadPoolExecutor，可配置线程数（默认 1，稳定优先） |
-| **进度跟踪** | tqdm 进度条（自动回退到日志打印） |
-| **格式严格** | 输出 JSONL，每行 `{"id": "...", "answer": "..."}`，按 id 排序 |
-| **运行日志** | 自动生成 `.run_log.json`，记录总条数/错误数/吞吐量 |
-
-```python
-from Agent.pipeline_runner import CompetitionPipeline
-
-pipeline = CompetitionPipeline(
+summary = run_competition(
+    data_path="/absolute/path/to/competition.json",
+    output_path="/absolute/path/to/submission.jsonl",
+    model="qwen-vl-max",
     grounding_backend="qwen3vl_api",
     depth_backend="depth_anything_v3",
     max_workers=4,
-    retry_times=3,
-    checkpoint_dir="./checkpoints",
+    checkpoint_dir="/absolute/path/to/checkpoints",
 )
-summary = pipeline.run(
-    data_path="competition_9k.json",
-    output_path="submission.jsonl",
-    resume=True,   # 断点续传（默认）
-)
+
 print(summary)
-# {"total": 9000, "done_new": 9000, "skipped": 0, "error_cnt": 12, "elapsed_s": 3600.5}
 ```
 
 ---
 
-## 四、后端一览
+### 4. CLI
 
-| 类型 | 后端名 | 说明 | 依赖 |
-|------|--------|------|------|
-| **Grounding** | `qwen3vl_api`（默认） | Qwen3-VL API，无需 GPU | `openai`, `DASHSCOPE_API_KEY` |
-| | `dino` | GroundingDINO 开源 | `groundingdino-py`, `torch` |
-| | `qwen3vl_local` | 本地 Qwen3-VL，离线部署 | `transformers`, `torch` |
-| | `mock` | 合成结果，用于测试 | 仅需 `pillow` |
-| **Depth** | `depth_anything_v3`（默认） | 最新深度估算 | `transformers`, `torch` |
-| | `depth_anything_v2` | 稳定版 | 同上 |
-| | `midas` | 经典方案 | `torch.hub` |
-| | `mock` | 合成深度图，用于测试 | 仅需 `numpy` |
-
----
-
-## 五、参数参考
-
-### ReactAgent
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `model` | `"qwen-vl-max"` | VLM 模型名称 |
-| `api_key` | 环境变量 `DASHSCOPE_API_KEY` | DashScope API Key |
-| `max_iterations` | `8` | 最大工具调用轮数（竞赛推荐 6~10） |
-| `max_tokens` | `512` | 每轮最大生成 token 数 |
-| `temperature` | `0.0` | 采样温度（0 = 贪婪解码，竞赛推荐） |
-| `grounding_backend` | `"qwen3vl_api"` | 视觉定位后端 |
-| `depth_backend` | `"depth_anything_v3"` | 深度估算后端 |
-| `verbose` | `False` | 是否打印每一步详细信息 |
-
-### CompetitionPipeline
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `max_workers` | `1` | 并发线程数（先用 1 验证，再提高） |
-| `retry_times` | `3` | 单条最大重试次数 |
-| `retry_base_delay` | `2.0` | 退避基础延迟（秒） |
-| `request_interval` | `0.5` | 同线程连续请求最小间隔（秒） |
-| `checkpoint_dir` | `"./checkpoints"` | 断点目录 |
-
----
-
-## 六、依赖安装
+从仓库根目录运行：
 
 ```bash
-# 最小依赖（VLM API + Grounding API + Depth 模型）
-pip install openai pillow numpy transformers torch torchvision
+python Agent/pipeline_runner.py \
+  --data /absolute/path/to/competition.json \
+  --output /absolute/path/to/submission.jsonl \
+  --model qwen-vl-max \
+  --grounding qwen3vl_api \
+  --depth depth_anything_v3 \
+  --workers 4
+```
 
-# 可选：进度条
-pip install tqdm
+Mock 联调：
 
-# 设置 API Key
-export DASHSCOPE_API_KEY=sk-xxxxxxxx
+```bash
+python Agent/pipeline_runner.py \
+  --mock \
+  --data /absolute/path/to/sample.json \
+  --output /absolute/path/to/submission.jsonl
+```
+
+常用参数：
+
+| 参数 | 作用 |
+|---|---|
+| `--workers` | 并发线程数 |
+| `--max-iterations` | 单题 ReAct 最大轮数 |
+| `--retry` | 单题最大重试次数 |
+| `--interval` | 同线程连续请求最小间隔 |
+| `--image-dir` | 图像根目录 |
+| `--checkpoint-dir` | 检查点目录 |
+| `--no-resume` | 禁用断点续跑 |
+| `--verbose` | 打印详细推理过程 |
+
+---
+
+## 输出文件
+
+### 提交文件
+
+`submission.jsonl`
+
+每行只保留两个字段：
+
+```json
+{"id": "q1", "answer": "8.5 meters"}
+```
+
+### 运行日志
+
+`submission.run_log.json`
+
+包含：
+
+- `data_path`
+- `output_path`
+- `grounding_backend`
+- `depth_backend`
+- `model`
+- `max_workers`
+- `total`
+- `done_new`
+- `skipped`
+- `error_cnt`
+- `elapsed_s`
+- `throughput_per_min`
+
+---
+
+## 测试
+
+测试文件：`Agent/tests/test_agent_mock.py`
+
+覆盖点包括：
+
+- 包与模块导入；
+- `ToolExecutor` mock 工具调用；
+- `ReactAgent` 的状态机控制流；
+- `Action` / `Final Answer` 解析；
+- `CompetitionPipeline` 的输入加载、断点续跑、错误隔离；
+- `Checkpoint` 持久化。
+
+运行命令：
+
+```bash
+python Agent/tests/test_agent_mock.py --verbose
+```
+
+如果环境缺少 `Pillow`、`numpy` 或底层依赖，导入与 mock 测试也会失败；因此建议先补齐最小依赖再运行。
+
+---
+
+## 最小依赖建议
+
+若只想跑 Agent 主流程与 mock 测试，至少建议安装：
+
+```bash
+pip install pillow numpy
+```
+
+若要跑真实 API / 深度模型，再补充：
+
+```bash
+pip install openai transformers torch torchvision tqdm
 ```
 
 ---
 
-## 七、竞赛建议
+## 适合继续扩展的位置
 
-1. **模型选择**：首选 `qwen3-vl-72b-instruct`（能力最强），API 限额不足时退而使用 `qwen-vl-max`。
-2. **max_iterations**：设为 6~8，过少会导致工具调用不足，过多会超时。
-3. **temperature=0**：竞赛中关闭随机性，确保相同输入得到相同输出（方便 debug）。
-4. **并发策略**：先用 `max_workers=1` 跑 50 条验证正确性，再提高到 4~8（注意 API 限速）。
-5. **断点续传**：始终保持 `resume=True`（默认），保证 9k 数据即使中途崩溃也能续传。
-6. **错误监控**：检查 `run_log.json` 中的 `error_cnt`，若过高则降低并发数或加大重试延迟。
+如果后续要继续演进 Agent，通常从下面几处下手：
 
+- **新增工具**：改 `prompt_template.py` + `tool_executor.py`
+- **调整推理协议**：改 `AGENT_SYSTEM_PROMPT` 与 `ReactAgent` 解析逻辑
+- **更换批量调度策略**：改 `CompetitionPipeline`
+- **替换感知后端**：保持 `ToolExecutor` 接口不变，扩展底层 Grounding / Depth 模块
+
+---
+
+## 总结
+
+从代码实现上看，`Agent/` 已经形成了一条完整链路：
+
+- 前端是受约束的 ReAct 协议；
+- 中间是统一工具路由与异常隔离；
+- 后端是视觉定位与 3D 几何推理；
+- 外层有批量竞赛运行器负责稳定性与工程化输出。
+
+如果你要读代码，建议按这个顺序看：
+
+1. `prompt_template.py`
+2. `tool_executor.py`
+3. `react_agent.py`
+4. `pipeline_runner.py`
+5. `tests/test_agent_mock.py`
