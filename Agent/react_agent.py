@@ -223,8 +223,8 @@ class ReactAgent:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             # 两条停止序列互补："\nObservation:" 捕获行中出现的情况，
-        # "Observation:" 额外防止模型在响应首行就开始伪造观测值。
-        stop=["\nObservation:", "Observation:"],
+            # "Observation:" 额外防止模型在响应首行就开始伪造观测值。
+            stop=["\nObservation:", "Observation:"],
         )
         content = response.choices[0].message.content
         if isinstance(content, list):
