@@ -409,6 +409,9 @@ class CompetitionPipeline:
         error_cnt = 0
         pbar = self._make_progress_bar(len(pending))
 
+        # 非续传模式下，在内存中收集本次处理的全部结果
+        local_results: list[dict] = []
+
         def _task(item):
             result = self._process_one(item, data_dir)
             if resume:
@@ -419,6 +422,7 @@ class CompetitionPipeline:
             # 单线程顺序处理（最稳定）
             for item in pending:
                 result = _task(item)
+                local_results.append(result)
                 done_new += 1
                 if result["status"] == "error":
                     error_cnt += 1
@@ -436,6 +440,7 @@ class CompetitionPipeline:
                 future_map = {executor.submit(_task, item): item for item in pending}
                 for future in as_completed(future_map):
                     result = future.result()
+                    local_results.append(result)
                     done_new += 1
                     if result["status"] == "error":
                         error_cnt += 1
@@ -457,8 +462,8 @@ class CompetitionPipeline:
         if resume:
             all_results = ckpt.all_results()
         else:
-            # 非续传模式：直接从本次处理结果收集（按原始顺序）
-            id_to_result = {str(r["id"]): r for r in ckpt.all_results()}
+            # 非续传模式：从本次内存结果中按原始数据顺序重建
+            id_to_result = {str(r["id"]): r for r in local_results}
             all_results = [
                 id_to_result.get(str(r["id"]), {"id": r["id"], "answer": "[MISSING]", "status": "missing"})
                 for r in records

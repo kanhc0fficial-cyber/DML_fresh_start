@@ -85,7 +85,8 @@ class TestImports(unittest.TestCase):
         self.assertGreater(len(ALL_TOOL_NAMES), 0)
         for name in ALL_TOOL_NAMES:
             self.assertIsInstance(name, str)
-            self.assertTrue(name.isidentifier() or "_" in name)
+            # Tool names must be valid Python identifiers (underscores are allowed)
+            self.assertTrue(name.isidentifier(), f"'{name}' is not a valid identifier")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

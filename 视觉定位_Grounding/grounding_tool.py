@@ -45,12 +45,13 @@ def get_bounding_box(
         图像路径或 PIL 图像。
     object_text : str
         目标描述，如 "红色车"、"white house"。
-    backend : "qwen3vl_api" | "dino" | "qwen3vl_local"
+    backend : "qwen3vl_api" | "dino" | "qwen3vl_local" | "mock"
         使用的后端模型：
         - "qwen3vl_api"   : Qwen3-VL API（推荐）。需要 DASHSCOPE_API_KEY 环境变量，
                             无需本地 GPU。可通过 api_key、model 等参数自定义。
         - "dino"          : Grounding DINO，开源零样本检测标杆，无需 API Key，
                             需本地安装 groundingdino-py。
+        - "qwen3vl_local"  : Qwen3-VL 本地推理，需要模型权重和 GPU，无需 API Key。
         - "mock"           : 开发/测试模式，返回合成边界框，无需任何 API Key 或模型。
     return_all : bool
         True 返回所有检测框（list of lists）；False 只返回第一个框。
@@ -72,9 +73,6 @@ def get_bounding_box(
         未知的 backend 名称。
     """
     if backend == "qwen3vl_api":
-        from grounding_qwen3vl import Qwen3VLAPIGrounder
-        grounder = Qwen3VLAPIGrounder(**backend_kwargs)
-        return grounder.get_bounding_box(image, object_text, return_all=return_all)
         from grounding_qwen3vl import Qwen3VLAPIGrounder
         grounder = Qwen3VLAPIGrounder(**backend_kwargs)
         return grounder.get_bounding_box(image, object_text, return_all=return_all)
