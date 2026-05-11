@@ -27,7 +27,7 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-BackendType = Literal["dino", "qwen3vl_api", "qwen3vl_local"]
+BackendType = Literal["dino", "qwen3vl_api", "qwen3vl_local", "mock"]
 
 
 def get_bounding_box(
@@ -45,13 +45,14 @@ def get_bounding_box(
         图像路径或 PIL 图像。
     object_text : str
         目标描述，如 "红色车"、"white house"。
-    backend : "qwen3vl_api" | "dino" | "qwen3vl_local"
+    backend : "qwen3vl_api" | "dino" | "qwen3vl_local" | "mock"
         使用的后端模型：
         - "qwen3vl_api"   : Qwen3-VL API（推荐）。需要 DASHSCOPE_API_KEY 环境变量，
                             无需本地 GPU。可通过 api_key、model 等参数自定义。
         - "dino"          : Grounding DINO，开源零样本检测标杆，无需 API Key，
                             需本地安装 groundingdino-py。
-        - "qwen3vl_local" : Qwen3-VL 本地推理，需要模型权重和 GPU，无需 API Key。
+        - "qwen3vl_local"  : Qwen3-VL 本地推理，需要模型权重和 GPU，无需 API Key。
+        - "mock"           : 开发/测试模式，返回合成边界框，无需任何 API Key 或模型。
     return_all : bool
         True 返回所有检测框（list of lists）；False 只返回第一个框。
     **backend_kwargs :
@@ -59,6 +60,7 @@ def get_bounding_box(
         qwen3vl_api  支持：api_key, model, base_url, max_tokens, image_format
         dino         支持：config_path, weights_path, device, box_threshold, text_threshold
         qwen3vl_local 支持：model_name_or_path, device, lazy_load
+        mock          支持：（无额外参数）
 
     Returns
     -------
@@ -85,8 +87,33 @@ def get_bounding_box(
         grounder = Qwen3VLGrounder(**backend_kwargs)
         return grounder.get_bounding_box(image, object_text, return_all=return_all)
 
+    elif backend == "mock":
+        # 开发/测试模式：返回图像中心附近的合成边界框，无需任何模型
+        import random
+        if isinstance(image, (str, Path)):
+            from PIL import Image as _PIL_Image
+            img = _PIL_Image.open(image).convert("RGB")
+        else:
+            img = image
+        w, h = img.size
+        rng = random.Random(hash(object_text) & 0xFFFFFFFF)
+        cx = rng.randint(w // 4, 3 * w // 4)
+        cy = rng.randint(h // 4, 3 * h // 4)
+        bw = rng.randint(w // 10, w // 4)
+        bh = rng.randint(h // 10, h // 4)
+        box = [
+            max(0.0, cx - bw / 2),
+            max(0.0, cy - bh / 2),
+            min(float(w), cx + bw / 2),
+            min(float(h), cy + bh / 2),
+        ]
+        logger.debug("mock grounding | target='%s' | box=%s", object_text, box)
+        if return_all:
+            return [box]
+        return box
+
     else:
         raise ValueError(
             f"未知的 backend: '{backend}'。"
-            "支持的选项: 'qwen3vl_api', 'dino', 'qwen3vl_local'。"
+            "支持的选项: 'qwen3vl_api', 'dino', 'qwen3vl_local', 'mock'。"
         )
